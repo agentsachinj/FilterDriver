@@ -24,6 +24,7 @@ using System.Linq;
 using System.ServiceProcess;
 using System.Text;
 
+using EaseFilter.CommonObjects;
 
 namespace EaseFltCSConsoleDemo
 {
@@ -36,7 +37,12 @@ namespace EaseFltCSConsoleDemo
 
         protected override void OnStart(string[] args)
         {
-            FilterWorker.StartService();
+            string lastError = string.Empty;
+
+            if (!FilterWorker.StartService(out lastError))
+            {
+                EventManager.WriteMessage(100, "StartFilter", EventLevel.Error, "Start filter service failed with error " + lastError);
+            }
         }
 
         protected override void OnStop()

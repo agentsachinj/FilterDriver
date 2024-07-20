@@ -29,6 +29,7 @@ using Microsoft.Win32.SafeHandles;
 using System.Security.AccessControl;
 using System.Security.Principal;
 
+using EaseFilter.FilterControl;
 using EaseFilter.CommonObjects;
 
 namespace RegMon
@@ -36,12 +37,17 @@ namespace RegMon
     public partial class RegUnitTest : Form
     {
 
-        bool isUnitTestCompleted = false;
+        bool isUnitTestStarted = false;
+        FilterControl filterControl = new FilterControl();
 
-        public RegUnitTest()
+        //Purchase a license key with the link: http://www.easefilter.com/Order.htm
+        //Email us to request a trial key: info@easefilter.com //free email is not accepted.
+        public static string licenseKey = "11542-941E5-86503-C186E-C8EC0-63A09-0BB1F-142"; // This is a registration key for the trial license key - 11542-941E5-86503-C186E-CBEC0-66A50
+
+        public RegUnitTest(string _licenseKey)
         {
             InitializeComponent();
-
+            licenseKey = _licenseKey;
         }
 
 
@@ -49,11 +55,8 @@ namespace RegMon
         {
             try
             {
-                FilterAPI.ResetConfigData();
-                RegistryUnitTest.RegistryFilterUnitTest(richTextBox_TestResult);
-                GlobalConfig.Load();
-
-              
+                RegistryUnitTest registryUnitTest = new RegistryUnitTest();
+                registryUnitTest.RegistryFilterUnitTest(filterControl, richTextBox_TestResult, licenseKey);
             }
             catch (Exception ex)
             {
@@ -63,11 +66,24 @@ namespace RegMon
 
         private void RegUnitTest_Activated(object sender, EventArgs e)
         {
-            if (!isUnitTestCompleted)
+            if (!isUnitTestStarted)
             {
+                isUnitTestStarted = true;
+
+                string lastError = string.Empty;
+                if (!filterControl.StartFilter(GlobalConfig.filterType, GlobalConfig.FilterConnectionThreads, GlobalConfig.ConnectionTimeOut, licenseKey, ref lastError))
+                {
+                    MessageBox.Show(lastError, "StartFilter", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                System.Threading.Thread.Sleep(3000);
+
                 StartFilterUnitTest();
-                isUnitTestCompleted = true;
+
+                filterControl.StopFilter();
             }
+           
         }
 
     }

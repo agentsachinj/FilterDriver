@@ -33,7 +33,7 @@
             this.textBox_Input = new System.Windows.Forms.TextBox();
             this.button_Ok = new System.Windows.Forms.Button();
             this.openFileDialog1 = new System.Windows.Forms.OpenFileDialog();
-            this.folderBrowserDialog1 = new System.Windows.Forms.FolderBrowserDialog();
+            this.button_GetFilePath = new System.Windows.Forms.Button();
             this.SuspendLayout();
             // 
             // label_InputPrompt
@@ -68,11 +68,22 @@
             // 
             this.openFileDialog1.FileName = "openFileDialog1";
             // 
+            // button_GetFilePath
+            // 
+            this.button_GetFilePath.Location = new System.Drawing.Point(475, 33);
+            this.button_GetFilePath.Name = "button_GetFilePath";
+            this.button_GetFilePath.Size = new System.Drawing.Size(27, 20);
+            this.button_GetFilePath.TabIndex = 3;
+            this.button_GetFilePath.Text = "...";
+            this.button_GetFilePath.UseVisualStyleBackColor = true;
+            this.button_GetFilePath.Click += new System.EventHandler(this.button_GetFilePath_Click);
+            // 
             // InputForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(514, 91);
+            this.Controls.Add(this.button_GetFilePath);
             this.Controls.Add(this.button_Ok);
             this.Controls.Add(this.textBox_Input);
             this.Controls.Add(this.label_InputPrompt);
@@ -91,6 +102,6 @@
         private System.Windows.Forms.TextBox textBox_Input;
         private System.Windows.Forms.Button button_Ok;
         private System.Windows.Forms.OpenFileDialog openFileDialog1;
-        private System.Windows.Forms.FolderBrowserDialog folderBrowserDialog1;
+        private System.Windows.Forms.Button button_GetFilePath;
     }
 }

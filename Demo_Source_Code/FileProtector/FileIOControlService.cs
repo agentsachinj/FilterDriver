@@ -1,10 +1,17 @@
 ﻿///////////////////////////////////////////////////////////////////////////////
 //
-//    (C) Copyright 2012 EaseFilter Technologies Inc.
+//    (C) Copyright 2011 EaseFilter Technologies
 //    All Rights Reserved
 //
 //    This software is part of a licensed software product and may
 //    only be used or copied in accordance with the terms of that license.
+//
+//    NOTE:  THIS MODULE IS UNSUPPORTED SAMPLE CODE
+//
+//    This module contains sample code provided for convenience and
+//    demonstration purposes only,this software is provided on an 
+//    "AS-IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, 
+//     either express or implied.  
 //
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -16,20 +23,23 @@ using System.Text;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 
-using EaseFilter.CommonObjects;
+using EaseFilter.FilterControl;
 
-namespace FileProtector
+namespace  EaseFilter.CommonObjects
 {
-    class FilterService
+    public class FilterService
     {
-        public static bool IOAccessControl(FilterAPI.MessageSendData messageSend, ref FilterAPI.MessageReplyData messageReply)
+        public static bool AuthorizeFileAccess(FilterAPI.MessageSendData messageSend, ref FilterAPI.MessageReplyData messageReply)
         {
             bool ret = true;
 
             try
             {
+                messageReply.MessageId = messageSend.FilterRuleId;
+                messageReply.MessageType = messageSend.MessageType;
+                messageReply.ReturnStatus = (uint)NtStatus.Status.Success;
 
-                messageReply.MessageId = messageSend.MessageId;
+                messageReply.MessageId = messageSend.FilterRuleId;
                 messageReply.MessageType = messageSend.MessageType;
 
                 //
@@ -72,38 +82,38 @@ namespace FileProtector
 
 
                 //Here is the demo to copy file content before it was deleted.-----------------------------------------------
-                bool isFileDeleted = false;
+                bool isFileDeleting = false;
                 if (messageSend.Status == (uint)NtStatus.Status.Success)
                 {
                     if (messageType == FilterAPI.MessageType.POST_CREATE)
                     {
                         if ((messageSend.CreateOptions & (uint)WinData.CreateOptions.FILE_DELETE_ON_CLOSE) > 0)
                         {
-                            isFileDeleted = true;
+                            isFileDeleting = true;
                         }
                     }
-                    else if (messageType == FilterAPI.MessageType.POST_SET_INFORMATION)
+                    else if (messageType == FilterAPI.MessageType.PRE_SET_INFORMATION)
                     {
                         if (infoClass == WinData.FileInfomationClass.FileDispositionInformation)
                         {
-                            isFileDeleted = true;
+                            isFileDeleting = true;
                         }
                     }
 
-                    if (isFileDeleted)
+                    if (isFileDeleting)
                     {
 
-                        IntPtr fileHandle = IntPtr.Zero;
-                        bool retVal = FilterAPI.GetFileHandleInFilter(messageSend.FileName,(uint)FileAccess.Read, ref fileHandle);                        
-                        if (retVal)
-                        {
-                            SafeFileHandle sHandle = new SafeFileHandle(fileHandle, true);
-                            FileStream fileStream = new FileStream(sHandle, FileAccess.Read);
+                        //IntPtr fileHandle = IntPtr.Zero;
+                        //bool retVal = FilterAPI.GetFileHandleInFilter(messageSend.FileName,(uint)FileAccess.Read, ref fileHandle);                        
+                        //if (retVal)
+                        //{
+                        //    SafeFileHandle sHandle = new SafeFileHandle(fileHandle, true);
+                        //    FileStream fileStream = new FileStream(sHandle, FileAccess.Read);
 
-                            //copy your data here...
+                        //    //copy your data here...
 
-                            fileStream.Close();
-                        }
+                        //    fileStream.Close();
+                        //}
 
                     }
                 }
@@ -123,7 +133,7 @@ namespace FileProtector
                             //Array.Copy(returnData, messageReply.DataBuffer, returnData.Length);
                             //messageReply.DataBufferLength = (uint)returnData.Length;
                             //messageReply.FilterStatus = (uint)FilterAPI.FilterStatus.FILTER_COMPLETE_PRE_OPERATION;
-                            //messageReply.ReturnStatus = (uint)NtStatus.Status.Reparse;
+                            //messageReply.ReturnStatus = (uint)NtStatus.Status.Reparse;                            
 
                             break;
                         }
@@ -162,11 +172,22 @@ namespace FileProtector
                     case FilterAPI.MessageType.PRE_QUERY_INFORMATION:
                     case FilterAPI.MessageType.POST_QUERY_INFORMATION:
                         {
-                            ret = true;
                             switch (infoClass)
                             {
                                 case WinData.FileInfomationClass.FileRenameInformation:
                                     {
+                                        if (FilterAPI.MessageType.PRE_SET_INFORMATION == messageType)
+                                        {
+                                            string blockFileName = @"c:\filterTest\blockRename.txt";
+                                            //test block rename to blockFileName, it needs to register PRE_SET_INFORMATION;
+                                            if (string.Compare(messageSend.FileName, blockFileName, true) == 0)
+                                            {                                                
+                                                EventManager.WriteMessage(179, "IOAccessControl", EventLevel.Warning, "Block rename for file:" + messageSend.FileName);
+                                                ret = false;
+                                                break;
+                                            }
+                                        }
+
                                         //you can block file rename as below
                                         //messageReply.FilterStatus = (uint)FilterAPI.FilterStatus.FILTER_COMPLETE_PRE_OPERATION;
                                         //messageReply.ReturnStatus = (uint)NtStatus.Status.AccessDenied;
@@ -208,7 +229,6 @@ namespace FileProtector
                                     }
                                 default:
                                     {
-                                        ret = false;
                                         break;
                                     }
                             }

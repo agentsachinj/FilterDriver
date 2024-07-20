@@ -25,16 +25,20 @@ using System.Windows.Forms;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 
+using EaseFilter.FilterControl;
 using EaseFilter.CommonObjects;
 
 namespace ProcessMon
 {
     static public class ProcessUnitTest
     {
+        static FilterControl filterControl = new FilterControl();
         public static RichTextBox unitTestResult = new RichTextBox();
         public static bool newProcessCreationNotification = false;
         public static bool monitorIONotification = false;
         public static bool controlIONotification = false;
+
+        static string lastError = string.Empty;
 
         static private void AppendUnitTestResult(string text, Color color)
         {
@@ -63,7 +67,6 @@ namespace ProcessMon
         {
             try
             {
-                FilterAPI.ResetConfigData();
 
                 //
                 //Process control flag test,deny new process creation.
@@ -75,12 +78,12 @@ namespace ProcessMon
                 var proc = System.Diagnostics.Process.Start(processName);
                 proc.Kill();
 
-                if (!FilterAPI.AddProcessFilterRule((uint)processName.Length * 2, processName, controlFlag, 0))
-                {
-                    AppendUnitTestResult("AddProcessFilterRule failed:" + FilterAPI.GetLastErrorMessage(), Color.Red);
-                    return;
+                ProcessFilter processFilter = new ProcessFilter(processName);
+                processFilter.ControlFlag = controlFlag;
 
-                }
+                filterControl.ClearFilters();
+                filterControl.AddFilter(processFilter);
+                filterControl.SendConfigSettingsToFilter(ref lastError);
 
                 try
                 {
@@ -98,26 +101,51 @@ namespace ProcessMon
             {
                 AppendUnitTestResult("DENY_NEW_PROCESS_CREATION failed, return error:" + ex.Message, Color.Red);
             }
+            finally
+            {
+                filterControl.ClearFilters();
+                filterControl.SendConfigSettingsToFilter(ref lastError);
+            }
            
+        }
+
+        /// <summary>
+        /// Fires this event when the new process was being created.
+        /// </summary>
+        public static void OnProcessCreation(object sender, ProcessEventArgs e)
+        {
+            if (e.ImageFileName.IndexOf("cmd.exe") >= 0)
+            {
+                //this is our unit test file name.
+                newProcessCreationNotification = true;
+            }
+        }
+
+        /// <summary>
+        /// Fires this event after the event was triggered.
+        /// </summary>
+        public static void OnProcessInfoNotification(object sender, ProcessEventArgs e)
+        {
+            //do your job here.
+
         }
 
         private static void NewProcessCallbackTest()
         {
             try
             {
-                FilterAPI.ResetConfigData();
 
                 //
                 //Process control flag test, new process creation notification.
                 //
                 string processName = "cmd.exe";
-                uint controlFlag = (uint)FilterAPI.ProcessControlFlag.PROCESS_CREATION_NOTIFICATION;
-                if (!FilterAPI.AddProcessFilterRule((uint)processName.Length * 2, processName, controlFlag, 0))
-                {
-                    AppendUnitTestResult("AddProcessFilterRule failed:" + FilterAPI.GetLastErrorMessage(), Color.Red);
-                    return;
+                ProcessFilter processFilter = new ProcessFilter(processName);
+                processFilter.ControlFlag = (uint)FilterAPI.ProcessControlFlag.PROCESS_CREATION_NOTIFICATION;
+                processFilter.OnProcessCreation += OnProcessCreation;
 
-                }
+                filterControl.ClearFilters();
+                filterControl.AddFilter(processFilter);
+                filterControl.SendConfigSettingsToFilter(ref lastError);
 
                 try
                 {
@@ -125,16 +153,6 @@ namespace ProcessMon
                     var proc = System.Diagnostics.Process.Start(processName);
                     proc.Kill();
 
-                    Thread.Sleep(1000);
-
-                    if (newProcessCreationNotification)
-                    {
-                        AppendUnitTestResult("PROCESS_CREATION_NOTIFICATION control flag test passed.", Color.Green);
-                    }
-                    else
-                    {
-                        AppendUnitTestResult("PROCESS_CREATION_NOTIFICATION test failed, didn't receive the new process creation notification.", Color.Red);
-                    }
                 }
                 catch (Exception ex)
                 {
@@ -146,28 +164,37 @@ namespace ProcessMon
             {
                 AppendUnitTestResult("PROCESS_CREATION_NOTIFICATION failed," + ex.Message, Color.Red);
             }
-
+            finally
+            {
+                filterControl.SendConfigSettingsToFilter(ref lastError);
+            }
            
         }
+
+
+
 
         private static void ProcessFileControlTest()
         {
 
             try
             {
-                FilterAPI.ResetConfigData();
-
+                
                 //
                 //File access control test for process, to test block the new file creation for current process
                 //
-                string fileName = "test.txt";
-                uint currentPid = FilterAPI.GetCurrentProcessId();
+
+                ProcessFilter processFilter = new ProcessFilter("");
+                processFilter.ControlFlag = 0;
+                processFilter.ProcessId = FilterAPI.GetCurrentProcessId();
                 uint accessFlag = FilterAPI.ALLOW_MAX_RIGHT_ACCESS & (uint)~FilterAPI.AccessFlag.ALLOW_OPEN_WITH_CREATE_OR_OVERWRITE_ACCESS;
-                if (!FilterAPI.AddFileControlToProcessById(currentPid, 2, "*", accessFlag))
-                {
-                    AppendUnitTestResult("AddFileControlToProcessById failed:" + FilterAPI.GetLastErrorMessage(), Color.Red);
-                    return;
-                }
+                processFilter.FileAccessRights.Add("*", accessFlag);
+
+                filterControl.ClearFilters();
+                filterControl.AddFilter(processFilter);
+                filterControl.SendConfigSettingsToFilter(ref lastError);
+
+                string fileName = "test.txt";
 
                 try
                 {
@@ -188,55 +215,63 @@ namespace ProcessMon
             
         }
 
+        /// <summary>
+        /// Fires this event after the new file was created, the handle is not closed.
+        /// </summary>
+        public static void OnPreCreateFile(object sender, FileCreateEventArgs e)
+        {
+            if (e.FileName.IndexOf("test.txt") > 0)
+            {
+                controlIONotification = true;
+            }
+
+        }
+
+        /// <summary>
+        /// Fires this event after the new file was created, the handle is not closed.
+        /// </summary>
+        public static void OnFileCreate(object sender, FileCreateEventArgs e)
+        {
+            if (e.FileName.IndexOf("test.txt") > 0)
+            {
+                monitorIONotification = true;
+            }
+        }
+
+
         private static void ProcessFileIOCallbackTest()
         {
             try
             {
-                FilterAPI.ResetConfigData();
+                ProcessFilter processFilter = new ProcessFilter("");
+                processFilter.ControlFlag = 0;
+                processFilter.ProcessNameFilterMask = GlobalConfig.AssemblyName;
+                uint accessFlag = FilterAPI.ALLOW_MAX_RIGHT_ACCESS;
+                processFilter.FileAccessRights.Add("*", accessFlag);
+                processFilter.MonitorFileIOEventFilter = (ulong)(MonitorFileIOEvents.OnFileCreate);
+                processFilter.ControlFileIOEventFilter = (ulong)(ControlFileIOEvents.OnPreFileCreate);
+
+                processFilter.OnPreCreateFile += OnPreCreateFile;
+                processFilter.OnNewFileCreate += OnFileCreate;
+
+                filterControl.ClearFilters();
+                filterControl.AddFilter(processFilter);
+
+                if (!filterControl.SendConfigSettingsToFilter(ref lastError))
+                {
+                    AppendUnitTestResult("ProcessFileIOCallbackTest SendConfigSettingsToFilter failed:" + lastError, Color.Red);
+                    return;
+                }
 
                 //
                 //monitor and control IO callback notification test for current process
                 //
                 string fileName = GlobalConfig.AssemblyPath + "\\test.txt";
-                uint currentPid = FilterAPI.GetCurrentProcessId();
-                uint accessFlag = FilterAPI.ALLOW_MAX_RIGHT_ACCESS;
-                string currentProcessName = GlobalConfig.AssemblyName;
-
-                if (!FilterAPI.AddFileControlToProcessByName((uint)currentProcessName.Length * 2, currentProcessName, (uint)fileName.Length * 2, fileName, accessFlag))
-                {
-                    AppendUnitTestResult("AddFileControlToProcessByName failed:" + FilterAPI.GetLastErrorMessage(), Color.Red);
-                    return;
-                }
-
-                if (!FilterAPI.AddFileCallbackIOToProcessByName((uint)currentProcessName.Length * 2, currentProcessName, (uint)fileName.Length * 2, fileName,
-                 (uint)FilterAPI.MessageType.POST_CREATE, (uint)FilterAPI.MessageType.PRE_CREATE, 0, 0, 0))
-                {
-                    AppendUnitTestResult("AddFileControlToProcessByName failed:" + FilterAPI.GetLastErrorMessage(), Color.Red);
-                    return;
-                }
 
                 try
                 {
-                    File.AppendAllText(fileName, "This is test file content");
-                    Thread.Sleep(2000);
-
-                    if (monitorIONotification)
-                    {
-                        AppendUnitTestResult("Register monitor IO callback for current process test passed.", Color.Green);
-                    }
-                    else
-                    {
-                        AppendUnitTestResult("File monitor IO callback test failed, no monitor callback.", Color.Red);
-                    }
-
-                    if (controlIONotification)
-                    {
-                        AppendUnitTestResult("Register control IO callback for current process test passed.", Color.Green);
-                    }
-                    else
-                    {
-                        AppendUnitTestResult("File control IO callback test failed, no monitor callback.", Color.Red);
-                    }
+                    File.Delete(fileName);
+                    File.AppendAllText(fileName, "This is test file content");                   
 
                 }
                 catch (Exception ex)
@@ -250,11 +285,49 @@ namespace ProcessMon
                 AppendUnitTestResult("File access control test for current process failed," + ex.Message, Color.Red);
            
             }
+            finally
+            {
+                filterControl.SendConfigSettingsToFilter(ref lastError);
+            }
+            
+        }
+
+        public static void GetUnitTestResult()
+        {
+
+            Thread.Sleep(3000);
+
+            if (newProcessCreationNotification)
+            {
+                AppendUnitTestResult("PROCESS_CREATION_NOTIFICATION control flag test passed.", Color.Green);
+            }
+            else
+            {
+                AppendUnitTestResult("PROCESS_CREATION_NOTIFICATION test failed, didn't receive the new process creation notification.", Color.Red);
+            }
+
+            if (controlIONotification)
+            {
+                AppendUnitTestResult("Register control IO callback for current process test passed.", Color.Green);
+            }
+            else
+            {
+                AppendUnitTestResult("File control IO callback test failed, no monitor callback.", Color.Red);
+            }
+
+            if (monitorIONotification)
+            {
+                AppendUnitTestResult("Register monitor IO callback for current process test passed.", Color.Green);
+            }
+            else
+            {
+                AppendUnitTestResult("File monitor IO callback test failed, no monitor callback.", Color.Red);
+            }
 
             
         }
 
-        public static void ProcessFilterUnitTest(RichTextBox richTextBox_TestResult)
+        public static void ProcessFilterUnitTest(RichTextBox richTextBox_TestResult, string licenseKey)
         {
 
             string lastError = string.Empty;
@@ -266,6 +339,14 @@ namespace ProcessMon
             string message = "Process Filter Driver Unit Test.";
             AppendUnitTestResult(message, Color.Black);
 
+            if (!filterControl.StartFilter(GlobalConfig.filterType, GlobalConfig.FilterConnectionThreads, GlobalConfig.ConnectionTimeOut, licenseKey, ref lastError))
+            {
+                MessageBox.Show(lastError, "StartFilter", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            Thread.Sleep(3000);
+
             DenyNewProcessTest();
 
             NewProcessCallbackTest();
@@ -273,6 +354,10 @@ namespace ProcessMon
             ProcessFileControlTest();
 
             ProcessFileIOCallbackTest();
+
+            GetUnitTestResult();
+
+            filterControl.StopFilter();
         }
     }
 }

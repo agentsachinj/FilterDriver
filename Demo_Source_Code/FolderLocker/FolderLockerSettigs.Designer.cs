@@ -45,7 +45,6 @@ namespace EaseFilter.FolderLocker
             this.checkBox_HideFiles = new System.Windows.Forms.CheckBox();
             this.checkBox_AllowRead = new System.Windows.Forms.CheckBox();
             this.checkBox_AllowSetSecurity = new System.Windows.Forms.CheckBox();
-            this.checkBox_AllowExecution = new System.Windows.Forms.CheckBox();
             this.checkBox_AllowWrite = new System.Windows.Forms.CheckBox();
             this.checkBox_AllowDelete = new System.Windows.Forms.CheckBox();
             this.checkBox_AllowRename = new System.Windows.Forms.CheckBox();
@@ -69,7 +68,7 @@ namespace EaseFilter.FolderLocker
             this.groupBox1.Dock = System.Windows.Forms.DockStyle.Fill;
             this.groupBox1.Location = new System.Drawing.Point(0, 0);
             this.groupBox1.Name = "groupBox1";
-            this.groupBox1.Size = new System.Drawing.Size(618, 605);
+            this.groupBox1.Size = new System.Drawing.Size(554, 499);
             this.groupBox1.TabIndex = 12;
             this.groupBox1.TabStop = false;
             // 
@@ -87,7 +86,7 @@ namespace EaseFilter.FolderLocker
             this.groupBox_AccessControl.Dock = System.Windows.Forms.DockStyle.Fill;
             this.groupBox_AccessControl.Location = new System.Drawing.Point(3, 16);
             this.groupBox_AccessControl.Name = "groupBox_AccessControl";
-            this.groupBox_AccessControl.Size = new System.Drawing.Size(612, 586);
+            this.groupBox_AccessControl.Size = new System.Drawing.Size(548, 480);
             this.groupBox_AccessControl.TabIndex = 24;
             this.groupBox_AccessControl.TabStop = false;
             // 
@@ -167,7 +166,6 @@ namespace EaseFilter.FolderLocker
             this.groupBox2.Controls.Add(this.checkBox_HideFiles);
             this.groupBox2.Controls.Add(this.checkBox_AllowRead);
             this.groupBox2.Controls.Add(this.checkBox_AllowSetSecurity);
-            this.groupBox2.Controls.Add(this.checkBox_AllowExecution);
             this.groupBox2.Controls.Add(this.checkBox_AllowWrite);
             this.groupBox2.Controls.Add(this.checkBox_AllowDelete);
             this.groupBox2.Controls.Add(this.checkBox_AllowRename);
@@ -185,9 +183,9 @@ namespace EaseFilter.FolderLocker
             // checkBox_AllowCopyout
             // 
             this.checkBox_AllowCopyout.AutoSize = true;
-            this.checkBox_AllowCopyout.Location = new System.Drawing.Point(7, 88);
+            this.checkBox_AllowCopyout.Location = new System.Drawing.Point(7, 68);
             this.checkBox_AllowCopyout.Name = "checkBox_AllowCopyout";
-            this.checkBox_AllowCopyout.Size = new System.Drawing.Size(177, 19);
+            this.checkBox_AllowCopyout.Size = new System.Drawing.Size(154, 17);
             this.checkBox_AllowCopyout.TabIndex = 36;
             this.checkBox_AllowCopyout.Text = "Allow files being copied out";
             this.checkBox_AllowCopyout.UseVisualStyleBackColor = true;
@@ -196,9 +194,9 @@ namespace EaseFilter.FolderLocker
             // checkBox_Encryption
             // 
             this.checkBox_Encryption.AutoSize = true;
-            this.checkBox_Encryption.Location = new System.Drawing.Point(347, 55);
+            this.checkBox_Encryption.Location = new System.Drawing.Point(346, 55);
             this.checkBox_Encryption.Name = "checkBox_Encryption";
-            this.checkBox_Encryption.Size = new System.Drawing.Size(146, 19);
+            this.checkBox_Encryption.Size = new System.Drawing.Size(127, 17);
             this.checkBox_Encryption.TabIndex = 28;
             this.checkBox_Encryption.Text = "Enable file encryption";
             this.checkBox_Encryption.UseVisualStyleBackColor = true;
@@ -209,7 +207,7 @@ namespace EaseFilter.FolderLocker
             this.checkBox_HideFiles.AutoSize = true;
             this.checkBox_HideFiles.Location = new System.Drawing.Point(346, 32);
             this.checkBox_HideFiles.Name = "checkBox_HideFiles";
-            this.checkBox_HideFiles.Size = new System.Drawing.Size(127, 19);
+            this.checkBox_HideFiles.Size = new System.Drawing.Size(109, 17);
             this.checkBox_HideFiles.TabIndex = 26;
             this.checkBox_HideFiles.Text = "Hide files in folder";
             this.checkBox_HideFiles.UseVisualStyleBackColor = true;
@@ -220,7 +218,7 @@ namespace EaseFilter.FolderLocker
             this.checkBox_AllowRead.AutoSize = true;
             this.checkBox_AllowRead.Location = new System.Drawing.Point(191, 88);
             this.checkBox_AllowRead.Name = "checkBox_AllowRead";
-            this.checkBox_AllowRead.Size = new System.Drawing.Size(128, 19);
+            this.checkBox_AllowRead.Size = new System.Drawing.Size(110, 17);
             this.checkBox_AllowRead.TabIndex = 27;
             this.checkBox_AllowRead.Text = "Allow files reading";
             this.checkBox_AllowRead.UseVisualStyleBackColor = true;
@@ -231,29 +229,18 @@ namespace EaseFilter.FolderLocker
             this.checkBox_AllowSetSecurity.AutoSize = true;
             this.checkBox_AllowSetSecurity.Location = new System.Drawing.Point(191, 68);
             this.checkBox_AllowSetSecurity.Name = "checkBox_AllowSetSecurity";
-            this.checkBox_AllowSetSecurity.Size = new System.Drawing.Size(146, 19);
+            this.checkBox_AllowSetSecurity.Size = new System.Drawing.Size(129, 17);
             this.checkBox_AllowSetSecurity.TabIndex = 25;
             this.checkBox_AllowSetSecurity.Text = "Allow security change";
             this.checkBox_AllowSetSecurity.UseVisualStyleBackColor = true;
             this.checkBox_AllowSetSecurity.CheckedChanged += new System.EventHandler(this.checkBox_AllowSetSecurity_CheckedChanged);
-            // 
-            // checkBox_AllowExecution
-            // 
-            this.checkBox_AllowExecution.AutoSize = true;
-            this.checkBox_AllowExecution.Location = new System.Drawing.Point(7, 49);
-            this.checkBox_AllowExecution.Name = "checkBox_AllowExecution";
-            this.checkBox_AllowExecution.Size = new System.Drawing.Size(133, 19);
-            this.checkBox_AllowExecution.TabIndex = 24;
-            this.checkBox_AllowExecution.Text = "Allow file execution";
-            this.checkBox_AllowExecution.UseVisualStyleBackColor = true;
-            this.checkBox_AllowExecution.CheckedChanged += new System.EventHandler(this.checkBox_AllowExecution_CheckedChanged);
             // 
             // checkBox_AllowWrite
             // 
             this.checkBox_AllowWrite.AutoSize = true;
             this.checkBox_AllowWrite.Location = new System.Drawing.Point(191, 32);
             this.checkBox_AllowWrite.Name = "checkBox_AllowWrite";
-            this.checkBox_AllowWrite.Size = new System.Drawing.Size(116, 19);
+            this.checkBox_AllowWrite.Size = new System.Drawing.Size(100, 17);
             this.checkBox_AllowWrite.TabIndex = 15;
             this.checkBox_AllowWrite.Text = "Allow file writing";
             this.checkBox_AllowWrite.UseVisualStyleBackColor = true;
@@ -264,7 +251,7 @@ namespace EaseFilter.FolderLocker
             this.checkBox_AllowDelete.AutoSize = true;
             this.checkBox_AllowDelete.Location = new System.Drawing.Point(7, 32);
             this.checkBox_AllowDelete.Name = "checkBox_AllowDelete";
-            this.checkBox_AllowDelete.Size = new System.Drawing.Size(124, 19);
+            this.checkBox_AllowDelete.Size = new System.Drawing.Size(107, 17);
             this.checkBox_AllowDelete.TabIndex = 17;
             this.checkBox_AllowDelete.Text = "Allow file deletion";
             this.checkBox_AllowDelete.UseVisualStyleBackColor = true;
@@ -273,9 +260,9 @@ namespace EaseFilter.FolderLocker
             // checkBox_AllowRename
             // 
             this.checkBox_AllowRename.AutoSize = true;
-            this.checkBox_AllowRename.Location = new System.Drawing.Point(7, 68);
+            this.checkBox_AllowRename.Location = new System.Drawing.Point(7, 49);
             this.checkBox_AllowRename.Name = "checkBox_AllowRename";
-            this.checkBox_AllowRename.Size = new System.Drawing.Size(133, 19);
+            this.checkBox_AllowRename.Size = new System.Drawing.Size(113, 17);
             this.checkBox_AllowRename.TabIndex = 16;
             this.checkBox_AllowRename.Text = "Allow file renaming";
             this.checkBox_AllowRename.UseVisualStyleBackColor = true;
@@ -284,9 +271,9 @@ namespace EaseFilter.FolderLocker
             // checkBox_AllowRemoteAccess
             // 
             this.checkBox_AllowRemoteAccess.AutoSize = true;
-            this.checkBox_AllowRemoteAccess.Location = new System.Drawing.Point(7, 111);
+            this.checkBox_AllowRemoteAccess.Location = new System.Drawing.Point(6, 88);
             this.checkBox_AllowRemoteAccess.Name = "checkBox_AllowRemoteAccess";
-            this.checkBox_AllowRemoteAccess.Size = new System.Drawing.Size(209, 19);
+            this.checkBox_AllowRemoteAccess.Size = new System.Drawing.Size(182, 17);
             this.checkBox_AllowRemoteAccess.TabIndex = 21;
             this.checkBox_AllowRemoteAccess.Text = "Allow file accessing from network";
             this.checkBox_AllowRemoteAccess.UseVisualStyleBackColor = true;
@@ -297,7 +284,7 @@ namespace EaseFilter.FolderLocker
             this.checkBox_AllowNewFileCreation.AutoSize = true;
             this.checkBox_AllowNewFileCreation.Location = new System.Drawing.Point(191, 49);
             this.checkBox_AllowNewFileCreation.Name = "checkBox_AllowNewFileCreation";
-            this.checkBox_AllowNewFileCreation.Size = new System.Drawing.Size(150, 19);
+            this.checkBox_AllowNewFileCreation.Size = new System.Drawing.Size(131, 17);
             this.checkBox_AllowNewFileCreation.TabIndex = 22;
             this.checkBox_AllowNewFileCreation.Text = "Allow new file creation";
             this.checkBox_AllowNewFileCreation.UseVisualStyleBackColor = true;
@@ -318,7 +305,7 @@ namespace EaseFilter.FolderLocker
             this.label_PassPhrase.AutoSize = true;
             this.label_PassPhrase.Location = new System.Drawing.Point(344, 76);
             this.label_PassPhrase.Name = "label_PassPhrase";
-            this.label_PassPhrase.Size = new System.Drawing.Size(102, 15);
+            this.label_PassPhrase.Size = new System.Drawing.Size(88, 13);
             this.label_PassPhrase.TabIndex = 20;
             this.label_PassPhrase.Text = "Password phrase";
             // 
@@ -327,7 +314,7 @@ namespace EaseFilter.FolderLocker
             this.label_FolderName.AutoSize = true;
             this.label_FolderName.Location = new System.Drawing.Point(10, 15);
             this.label_FolderName.Name = "label_FolderName";
-            this.label_FolderName.Size = new System.Drawing.Size(79, 15);
+            this.label_FolderName.Size = new System.Drawing.Size(67, 13);
             this.label_FolderName.TabIndex = 12;
             this.label_FolderName.Text = "Folder Name";
             // 
@@ -353,7 +340,7 @@ namespace EaseFilter.FolderLocker
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(618, 605);
+            this.ClientSize = new System.Drawing.Size(554, 499);
             this.Controls.Add(this.groupBox1);
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Margin = new System.Windows.Forms.Padding(2);
@@ -362,6 +349,7 @@ namespace EaseFilter.FolderLocker
             this.Name = "FolderLockerSettigs";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
             this.Text = "Folder Locker Settings";
+            this.Load += new System.EventHandler(this.FolderLockerSettigs_Load);
             this.groupBox1.ResumeLayout(false);
             this.groupBox_AccessControl.ResumeLayout(false);
             this.groupBox_AccessControl.PerformLayout();
@@ -379,7 +367,6 @@ namespace EaseFilter.FolderLocker
         private System.Windows.Forms.GroupBox groupBox_AccessControl;
         private System.Windows.Forms.GroupBox groupBox2;
         private System.Windows.Forms.CheckBox checkBox_AllowSetSecurity;
-        private System.Windows.Forms.CheckBox checkBox_AllowExecution;
         private System.Windows.Forms.CheckBox checkBox_AllowWrite;
         private System.Windows.Forms.CheckBox checkBox_AllowDelete;
         private System.Windows.Forms.CheckBox checkBox_AllowRename;

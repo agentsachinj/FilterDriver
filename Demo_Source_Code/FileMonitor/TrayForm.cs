@@ -26,6 +26,7 @@ using System.Windows.Forms;
 using System.IO;
 
 using EaseFilter.CommonObjects;
+using EaseFilter.FilterControl;
 
 namespace FileMonitor
 {
@@ -35,7 +36,6 @@ namespace FileMonitor
 
         public TrayForm()
         {
-            Utils.CopyOSPlatformDependentFiles();
             InitializeComponent();
 
         }

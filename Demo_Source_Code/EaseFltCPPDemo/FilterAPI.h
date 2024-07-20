@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////////
 //
-//    (C) Copyright 2014 EaseFilter Technologies Inc.
+//    (C) Copyright 2014 EaseFilter
 //    All Rights Reserved
 //
 //    This software is part of a licensed software product and may
@@ -13,8 +13,11 @@
 
 //Purchase a license key with the link: http://www.EaseFilter.com/Order.htm
 //Email us to request a trial key: info@EaseFilter.com //free email is not accepted.
-#define	registerKey "******************************************"
+//#define	registerKey "*****************************************"
+#define	registerKey "11542-941E5-86503-C186E-C8EC0-63A09-0BB1F-142"	// This is a registration key for the trial license key - 11542-941E5-86503-C186E-CBEC0-66A50
 
+#define MESSAGE_SEND_VERIFICATION_NUMBER	0xFF000001
+#define	INET_ADDR_STR_LEN					22
 #define MAX_FILE_NAME_LENGTH				1024
 #define MAX_SID_LENGTH						256
 #define MAX_EXCLUDED_PROCESS_ID				200	
@@ -23,30 +26,44 @@
 #define MAX_BLOCK_SAVEAS_PROCESS_ID			200
 #define MAX_PATH							260
 #define	MAX_ERROR_MESSAGE_SIZE				1024
+#define	MAX_BUFFER_SIZE						16384
 #define BLOCK_SIZE							65536
 
 #define AES_VERIFICATION_KEY			0xccb76e80
 
-//the flags for encrypted file,indicates the action to the encrypted file open I/O.
-typedef enum _AESFlags
+typedef enum _FilterType 
 {
-	Flags_Enabled_Expire_Time			=	0x00000010, 
-	Flags_Enabled_Check_ProcessName		=	0x00000020, 
-	Flags_Enabled_Check_UserName		=	0x00000040, 
-	Flags_Enabled_Check_AccessFlags		=	0x00000080, 
-	Flags_Enabled_Check_User_Permit		=	0x00000100, 
-	Flags_AES_Key_Was_Embedded			=	0x00000200, 
-	Flags_Request_AccessFlags_From_User	=	0x00000400, 
-	Flags_Request_IV_And_Key_From_User	=	0x00000800, 
-	Flags_Enabled_Check_Computer_Id		=	0x00001000, 
-	Flags_Enabled_Check_User_Password	=	0x00002000, 
+    /// <summary>
+    /// File system control filter driver
+    /// </summary>
+    FILE_SYSTEM_CONTROL = 0x01,
+    /// <summary>
+    /// File system encryption filter driver
+    /// </summary>
+    FILE_SYSTEM_ENCRYPTION = 0x02,
+    /// <summary>
+    /// File system monitor filter driver
+    /// </summary>
+    FILE_SYSTEM_MONITOR = 0x04,
+    /// <summary>
+    /// File system registry filter driver
+    /// </summary>
+    FILE_SYSTEM_REGISTRY = 0x08,
+    /// <summary>
+    /// File system process filter driver
+    /// </summary>
+    FILE_SYSTEM_PROCESS = 0x10,
+    /// <summary>
+    /// File system hierarchical storage management filter driver
+    /// </summary>
+    FILE_SYSTEM_HSM = 0x40,
+    /// <summary>
+    /// File system cloud storage filter driver
+    /// </summary>
+    FILE_SYSTEM_CLOUD = 0x80,
 
-}AESFlags;
+} FilterType;
 
-//This is the first AES version which is using OpenSSL encryptor
-#define AES_VERSION_1 16
-//this is the second version which is using Microsoft CNG lib to support AES-NI feature, only vista or later OS can support.
-#define AES_VERSION_2 32
 
 //the structure of control meta data of the encrypted file.
 #pragma pack (push,1)
@@ -108,41 +125,6 @@ typedef struct _AES_TAG_CONTROL_DATA
 	
 } AES_TAG_CONTROL_DATA, *PAES_TAG_CONTROL_DATA;
 #pragma pack(pop)
-
-//---------------------------------------------------------------------------------------
-
-typedef enum _FilterType 
-{
-    /// <summary>
-    /// File system control filter driver
-    /// </summary>
-    FILE_SYSTEM_CONTROL = 0x01,
-    /// <summary>
-    /// File system encryption filter driver
-    /// </summary>
-    FILE_SYSTEM_ENCRYPTION = 0x02,
-    /// <summary>
-    /// File system monitor filter driver
-    /// </summary>
-    FILE_SYSTEM_MONITOR = 0x04,
-    /// <summary>
-    /// File system registry filter driver
-    /// </summary>
-    FILE_SYSTEM_REGISTRY = 0x08,
-    /// <summary>
-    /// File system process filter driver
-    /// </summary>
-    FILE_SYSTEM_PROCESS = 0x10,
-    /// <summary>
-    /// File system hierarchical storage management filter driver
-    /// </summary>
-    FILE_SYSTEM_HSM = 0x40,
-    /// <summary>
-    /// File system cloud storage filter driver
-    /// </summary>
-    FILE_SYSTEM_CLOUD = 0x80,
-
-} FilterType;
 
 
 #define MAX_REQUEST_TYPE 32
@@ -234,8 +216,299 @@ typedef enum _FilterCommand
 	/// send the thread handle operations ifnormation
 	/// </summary>
 	FILTER_SEND_THREAD_HANDLE_INFO = 0x0001000d,
-
+	/// <summary>
+	/// send the volume information when it was attached
+	/// </summary>
+	FILTER_SEND_ATTACHED_VOLUME_INFO = 0x0001000e,
+	/// <summary>
+	/// send the volume information when it was detached
+	/// </summary>
+	FILTER_SEND_DETACHED_VOLUME_INFO = 0x0001000f,
+    /// <summary>
+    /// send the event when the file IO was blocked by the config setting.
+	// if the flag ENABLE_SEND_DENIED_EVENT was enabled in global boolean setting.
+    /// </summary>
+    FILTER_SEND_DENIED_FILE_IO_EVENT = 0x00010010,
+    /// <summary>
+    /// send the event when the volume dismount was blocked by the config setting.
+	// if the flag ENABLE_SEND_DENIED_EVENT was enabled in global boolean setting.
+    /// </summary>
+    FILTER_SEND_DENIED_VOLUME_DISMOUNT_EVENT = 0x00010011,
+    /// <summary>
+    /// send the event when the process creation was blocked by the config setting.
+	// if the flag ENABLE_SEND_DENIED_EVENT was enabled in global boolean setting.
+    /// </summary>
+    FILTER_SEND_DENIED_PROCESS_CREATION_EVENT = 0x00010012,
+    /// <summary>
+    /// send the event when the registry access was blocked by the config setting.
+	// if the flag ENABLE_SEND_DENIED_EVENT was enabled in global boolean setting.
+    /// </summary>
+    FILTER_SEND_DENIED_REGISTRY_ACCESS_EVENT = 0x00010013,
+	/// <summary>
+    /// send the event when the protected process was terminiated ungratefully.
+	// if the flag ENABLE_SEND_DENIED_EVENT was enabled in global boolean setting.
+    /// </summary>
+    FILTER_SEND_DENIED_PROCESS_TERMINATED_EVENT = 0x00010014,
+	/// <summary>
+    /// send the event when the read from USB was blocked if the flag BLOCK_USB_READ was enabled in volume control flag.
+	// if the flag ENABLE_SEND_DENIED_EVENT was enabled in global boolean setting.
+    /// </summary>
+    FILTER_SEND_DENIED_USB_READ_EVENT = 0x00010015,
+	/// <summary>
+    /// send the event when the write to USB was blocked if the flag BLOCK_USB_WRITE was enabled in volume control flag.
+	// if the flag ENABLE_SEND_DENIED_EVENT was enabled in global boolean setting.
+    /// </summary>
+    FILTER_SEND_DENIED_USB_WRITE_EVENT = 0x00010016,
+	/// <summary>
+    /// send process information before the process is going to be terminated.
+    /// </summary>
+    FILTER_SEND_PRE_TERMINATE_PROCESS_INFO = 0x00010017,
+	
 }FilterCommand;
+
+//the IO name of the IO operation.
+typedef enum _IOName
+{
+    /// <summary>
+    /// Fires this event before the file create IO was going down to the file system.
+    /// </summary>
+    IOPreFileCreate = 0x00020001,
+    /// <summary>
+    /// Fires this event after the file create IO was returned from the file system.
+    /// </summary>
+    IOPostFileCreate,
+    /// <summary>
+    /// Fires this event before the file read IO was going down to the file system.
+    /// </summary>
+    IOPreFileRead,
+    /// <summary>
+    /// Fires this event after the file read IO was returned from the file system.
+    /// </summary>
+    IOPostFileRead,
+    /// <summary>
+    /// Fires this event before the file write IO was going down to the file system.
+    /// </summary>
+    IOPreFileWrite,
+    /// <summary>
+    /// Fires this event after the file write IO was returned from the file system.
+    /// </summary>
+    IOPostFileWrite,
+    /// <summary>
+    /// Fires this event before the query file size IO was going down to the file system.
+    /// </summary>
+    IOPreQueryFileSize,
+    /// <summary>
+    /// Fires this event after the query file size IO was returned from the file system.
+    /// </summary>
+    IOPostQueryFileSize,
+    /// <summary>
+    /// Fires this event before the query file basic info IO was going down to the file system.
+    /// </summary>
+    IOPreQueryFileBasicInfo,
+    /// <summary>
+    /// Fires this event after the query file basic info IO was returned from the file system.
+    /// </summary>
+    IOPostQueryFileBasicInfo,
+    /// <summary>
+    /// Fires this event before the query file standard info IO was going to the file system.
+    /// </summary>
+    IOPreQueryFileStandardInfo,
+    /// <summary>
+    /// Fires this event after the query file standard info IO was returned from the file system.
+    /// </summary>
+    IOPostQueryFileStandardInfo,
+    /// <summary>
+    /// Fires this event before the query file network info IO was going down to the file system.
+    /// </summary>
+    IOPreQueryFileNetworkInfo,
+    /// <summary>
+    /// Fires this event after the query file network info IO was returned from the file system.
+    /// </summary>
+    IOPostQueryFileNetworkInfo,
+    /// <summary>
+    /// Fires this event before the query file Id IO was going down to the file system.
+    /// </summary>
+    IOPreQueryFileId,
+    /// <summary>
+    /// Fires this event after the query file Id IO was returned from the file system.
+    /// </summary>
+    IOPostQueryFileId,
+    /// <summary>
+    /// Fires this event before the query file info IO was going down to the file system
+    /// if the query file information class is not 'QueryFileSize','QueryFileBasicInfo'
+    /// ,'QueryFileStandardInfo','QueryFileNetworkInfo' or 'QueryFileId'.
+    /// </summary>
+    IOPreQueryFileInfo,
+    /// <summary>
+    /// Fires this event after the query file info IO was returned from the file system.
+    /// </summary>
+    IOPostQueryFileInfo,
+    /// <summary>
+    /// Fires this event before the set file size IO was going down to the file system.
+    /// </summary>         
+    IOPreSetFileSize,
+    /// <summary>
+    /// Fires this event after the set file size IO was returned from the file system.
+    /// </summary>
+    IOPostSetFileSize,
+    /// <summary>
+    /// Fires this event before the set file basic info IO was going down to the file system.
+    /// </summary>
+    IOPreSetFileBasicInfo,
+    /// <summary>
+    /// Fires this event after the set file basic info IO was returned from the file system.
+    /// </summary>
+    IOPostSetFileBasicInfo,
+    /// <summary>
+    /// Fires this event before the set file standard info IO was going down to the file system.
+    /// </summary>
+    IOPreSetFileStandardInfo,
+    /// <summary>
+    /// Fires this event after the set file standard info IO was returned from the file system.
+    /// </summary>
+    IOPostSetFileStandardInfo,
+    /// <summary>
+    /// Fires this event before the set file network info was going down to the file system.
+    /// </summary>
+    IOPreSetFileNetworkInfo,
+    /// <summary>
+    /// Fires this event after the set file network info was returned from the file system.
+    /// </summary>
+    IOPostSetFileNetworkInfo,
+    /// <summary>
+    /// Fires this event before the file move or rename IO was going down to the file system.
+    /// </summary>
+    IOPreMoveOrRenameFile,
+    /// <summary>
+    /// Fires this event after the file move or rename IO was returned from the file system.
+    /// </summary>
+    IOPostMoveOrRenameFile,
+    /// <summary>
+    /// Fires this event before the file delete IO was going down to the file system.
+    /// </summary>
+    IOPreDeleteFile,
+    /// <summary>
+    /// Fires this event after the file delete IO was returned from the file system.
+    /// </summary>
+    IOPostDeleteFile,
+    /// <summary>
+    /// Fires this event before the set file info IO was going down to the file system
+    /// if the information class is not 'SetFileSize','SetFileBasicInfo'
+    /// ,'SetFileStandardInfo','SetFileNetworkInfo'.
+    /// </summary>
+    IOPreSetFileInfo,
+    /// <summary>
+    /// Fires this event after the set file info IO was returned from the file system.
+    /// </summary>
+    IOPostSetFileInfo,
+    /// <summary>
+    /// Fires this event before the query directory file info was going down to the file system.
+    /// </summary>
+    IOPreQueryDirectoryFile,
+    /// <summary>
+    /// Fires this event after the query directory file info was returned from the file system.
+    /// </summary>
+    IOPostQueryDirectoryFile,
+    /// <summary>
+    /// Fires this event before the query file security IO was going down to the file system.
+    /// </summary>
+    IOPreQueryFileSecurity,
+    /// <summary>
+    /// Fires this event after the query file security IO was returned from the file system.
+    /// </summary>
+    IOPostQueryFileSecurity,
+    /// <summary>
+    /// Fires this event before the set file security IO was going down to the file system.
+    /// </summary>
+    IOPreSetFileSecurity,
+    /// <summary>
+    /// Fires thiis event after the set file security IO was returned from the file system.
+    /// </summary>
+    IOPostSetFileSecurity,
+    /// <summary>
+    /// Fire this event before the file handle close IO was going down to the file system.
+    /// </summary>
+    IOPreFileHandleClose,
+    /// <summary>
+    /// Fires this event after the file handle close IO was returned from the file system.
+    /// </summary>
+    IOPostFileHandleClose,
+    /// <summary>
+    /// Fires this event before the file close IO was going down to the file system.
+    /// </summary>
+    IOPreFileClose,
+    /// <summary>
+    /// Fires this event after the file close IO was returned from the file system.
+    /// </summary>
+    IOPostFileClose,      
+
+}IOName;
+
+ /// <summary>
+/// The volume control flag.
+/// </summary>
+typedef enum  _VolumeControlFlag 
+{
+    /// <summary>
+    /// Get all the attached volumes' information.
+    /// </summary>
+    GET_ATTACHED_VOLUME_INFO    = 0x00000001,
+	/// <summary>
+    /// Get a notification when the filter driver attached to a volume.
+    /// </summary>
+    VOLUME_ATTACHED_NOTIFICATION    = 0x00000002,
+    /// <summary>
+    /// Get a notification when the filter driver detached from a volume.
+    /// </summary>
+    VOLUME_DETACHED_NOTIFICATION    = 0x00000004,
+	/// <summary>
+    ///Prevent the attched volumes from being formatted or dismounted.
+    /// </summary>
+    BLOCK_VOLUME_DISMOUNT			= 0x00000008,
+	/// <summary>
+    ///Block the read from the USB disk.
+    /// </summary>
+    BLOCK_USB_READ = 0x00000010,
+    /// <summary>
+    ///Block the write to the USB disk
+    /// </summary>
+    BLOCK_USB_WRITE = 0x00000020,
+
+                                  
+}VolumeControlFlag;
+
+
+//
+//the structure of the attached volume information
+typedef struct _VOLUME_INFO
+{	
+    /// <summary>
+    /// The length of the volume name.
+    /// </summary>
+    ULONG VolumeNameLength;
+    /// <summary>
+    /// The volume name buffer.
+    /// </summary>
+    WCHAR VolumeName[MAX_FILE_NAME_LENGTH];
+    /// <summary>
+    /// The length of the volume dos file name.
+    /// </summary>
+    ULONG VolumeDosNameLength;
+    /// <summary>
+    /// The volume dos file name buffer.
+    /// </summary>
+    WCHAR VolumeDosName[MAX_FILE_NAME_LENGTH];
+	/// <summary>
+	///the volume file system type.
+	/// </summary>
+	ULONG VolumeFilesystemType;    
+    /// <summary>
+    ///the Characteristics of the attached device object if existed. 
+    /// </summary>
+    ULONG DeviceCharacteristics;
+
+
+} VOLUME_INFO, *PVOLUME_INFO;
 
  /// <summary>
 /// process filter driver control flag.
@@ -246,6 +519,11 @@ typedef enum  _ProcessControlFlag
     /// deny the new process creation if the flag is on
     /// </summary>
     DENY_NEW_PROCESS_CREATION = 0x00000001,
+	/// <summary>
+    /// send the callback reqeust before the process is going to be terminated.
+	/// you can block the process termination in the callback function.
+    /// </summary>
+    PROCESS_PRE_TERMINATION_REQUEST = 0x00000002,
     /// <summary>
     /// Get a notification when a new process is being created.
     /// </summary>
@@ -351,80 +629,166 @@ typedef enum  _RegCallbackClass
     Reg_Pre_Flush_Key = 0x40000000,
     Reg_Post_Flush_Key = 0x80000000,
 
+	//high field for reg callback class
+	#define    Reg_Pre_Load_Key  (ULONGLONG)0x100000000
+	#define    Reg_Post_Load_Key  (ULONGLONG)0x200000000
+	#define    Reg_Pre_UnLoad_Key  (ULONGLONG)0x400000000
+	#define    Reg_Post_UnLoad_Key  (ULONGLONG)0x800000000
+	#define    Reg_Pre_Query_Key_Security  (ULONGLONG)0x1000000000
+	#define	   Reg_Post_Query_Key_Security  (ULONGLONG)0x2000000000
+	#define    Reg_Pre_Set_Key_Security  (ULONGLONG)0x4000000000
+	#define    Reg_Post_Set_Key_Security  (ULONGLONG)0x8000000000
+		//
+		// per-object context cleanup
+		//
+	#define    Reg_Callback_Object_Context_Cleanup  (ULONGLONG)0x10000000000
+		//
+		// new in Vista SP2 
+		//
+	#define    Reg_Pre_Restore_Key  (ULONGLONG)0x20000000000
+	#define    Reg_Post_Restore_Key  (ULONGLONG)0x40000000000
+	#define    Reg_Pre_Save_Key  (ULONGLONG)0x80000000000
+	#define    Reg_Post_Save_Key  (ULONGLONG)0x100000000000
+	#define    Reg_Pre_Replace_Key  (ULONGLONG)0x200000000000
+	#define    Reg_Post_Replace_Key  (ULONGLONG)0x400000000000
+
+	//
+	//new in Windows 10
+	//
+	#define    Reg_Pre_Query_KeyName  (ULONGLONG)0x800000000000
+	#define    Reg_Post_Query_KeyName  (ULONGLONG)0x1000000000000
+
+	#define    Max_Reg_Callback_Class  (ULONGLONG)0xFFFFFFFFFFFFFFFF
+
+
 }RegCallbackClass;
 
-//high field for reg callback class
-#define    Reg_Pre_Load_Key  (ULONGLONG)0x100000000
-#define    Reg_Post_Load_Key  (ULONGLONG)0x200000000
-#define    Reg_Pre_UnLoad_Key  (ULONGLONG)0x400000000
-#define    Reg_Post_UnLoad_Key  (ULONGLONG)0x800000000
-#define    Reg_Pre_Query_Key_Security  (ULONGLONG)0x1000000000
-#define	   Reg_Post_Query_Key_Security  (ULONGLONG)0x2000000000
-#define    Reg_Pre_Set_Key_Security  (ULONGLONG)0x4000000000
-#define    Reg_Post_Set_Key_Security  (ULONGLONG)0x8000000000
-    //
-    // per-object context cleanup
-    //
-#define    Reg_Callback_Object_Context_Cleanup  (ULONGLONG)0x10000000000
-    //
-    // new in Vista SP2 
-    //
-#define    Reg_Pre_Restore_Key  (ULONGLONG)0x20000000000
-#define    Reg_Post_Restore_Key  (ULONGLONG)0x40000000000
-#define    Reg_Pre_Save_Key  (ULONGLONG)0x80000000000
-#define    Reg_Post_Save_Key  (ULONGLONG)0x100000000000
-#define    Reg_Pre_Replace_Key  (ULONGLONG)0x200000000000
-#define    Reg_Post_Replace_Key  (ULONGLONG)0x400000000000
-
-//
-//new in Windows 10
-//
-#define    Reg_Pre_Query_KeyName  (ULONGLONG)0x800000000000
-#define    Reg_Post_Query_KeyName  (ULONGLONG)0x1000000000000
-
-#define    Max_Reg_Callback_Class  (ULONGLONG)0xFFFFFFFFFFFFFFFF
-
-
-
-
-//the I/O types of the monitor or control filter can intercept.
-typedef enum _MessageType
+//the I/O types of the monitor or control filter can intercept if you register the class.
+//the monitor IO only can register the post IO, it meant you can get the notification after the IO was completed.
+//the control IO can register both pre IO before the IO was processed by the file system and post IO after the IO 
+//was processed by the file system, the driver will wait for the response of the callback function.
+typedef  enum _IOCallbackClass
 {
-	
+	//this is the IRP_MJ_CREATE which requests to open a handle 
 	PRE_CREATE							= 0x00000001,
 	POST_CREATE							= 0x00000002,
+
+	//this is the filter only intercept the IO when the file was created.
+	#define PRE_NEW_FILE_CREATED  (ULONGLONG)0x0000000100000000
+	#define POST_NEW_FILE_CREATED  (ULONGLONG)0x0000000200000000
+
+	//this is the fast I/O read,return true when the data is in cache,
+	//if the data is not in cache, a new IRP cache read request will be generated.
 	PRE_FASTIO_READ						= 0x00000004,
 	POST_FASTIO_READ					= 0x00000008,
+
+	//this is the IRP_MJ_READ cache read, the data will be read from the cache, 
+	//if the data is not in cache, a paging read request will be generated.
 	PRE_CACHE_READ						= 0x00000010,
 	POST_CACHE_READ						= 0x00000020,
+
+	//this is the IRP_MJ_READ no cache read, the data read will be bypassed the cache manager.
 	PRE_NOCACHE_READ					= 0x00000040,
 	POST_NOCACHE_READ					= 0x00000080,
+
+	//this is the IRP_MJ_READ paging read, the data will be read from the disk to the cache.
 	PRE_PAGING_IO_READ					= 0x00000100,
 	POST_PAGING_IO_READ					= 0x00000200,
+
+	//this is the fast I/O write,the data was written to the cache if the request is satisfied immediately,
+	//or a IRP cache write will be generated.
 	PRE_FASTIO_WRITE					= 0x00000400,
 	POST_FASTIO_WRITE					= 0x00000800,
+
+	//this is the IRP_MJ_WRITE I/O cache write,the data was written to the cache, the IRP paging write will be gernerated after the cache write.
 	PRE_CACHE_WRITE						= 0x00001000,
 	POST_CACHE_WRITE					= 0x00002000,
+
+	//this is the IRP_MJ_WRITE no cache write, the data read will be written to the disk directly and bypass the cache manager.
 	PRE_NOCACHE_WRITE					= 0x00004000,
 	POST_NOCACHE_WRITE					= 0x00008000,
+
+	//this is the IRP_MJ_WRITE paging write, the data will be written from the cache to the disk.
 	PRE_PAGING_IO_WRITE					= 0x00010000,
 	POST_PAGING_IO_WRITE				= 0x00020000,
+
+	//this the IRP_QUERY_INFORMATION to query the file information. 
+	//if you register this class, the filter driver will intercept all requests to query information.
+	//if you want to only filter speecific query,i.e. only file size, you can register the below specific class.
 	PRE_QUERY_INFORMATION				= 0x00040000,
 	POST_QUERY_INFORMATION				= 0x00080000,
+
+	//this the IRP_QUERY_INFORMATION  with specific info class to query file size
+	#define PRE_QUERY_FILE_SIZE  (ULONGLONG)0x0000000400000000
+	#define POST_QUERY_FILE_SIZE  (ULONGLONG)0x0000000800000000
+
+	//this the IRP_QUERY_INFORMATION  with specific info class to query file basic information
+	#define PRE_QUERY_FILE_BASIC_INFO  (ULONGLONG)0x0000001000000000
+	#define POST_QUERY_FILE_BASIC_INFO  (ULONGLONG)0x0000002000000000
+
+	//this the IRP_QUERY_INFORMATION  with specific info class to query file standard information
+	#define PRE_QUERY_FILE_STANDARD_INFO  (ULONGLONG)0x0000004000000000
+	#define POST_QUERY_FILE_STANDARD_INFO  (ULONGLONG)0x0000008000000000
+
+	//this the IRP_QUERY_INFORMATION  with specific info class to query file network information
+	#define PRE_QUERY_FILE_NETWORK_INFO  (ULONGLONG)0x0000010000000000
+	#define POST_QUERY_FILE_NETWORK_INFO  (ULONGLONG)0x0000020000000000
+
+	//this the IRP_QUERY_INFORMATION  with specific info class to query file Id
+	#define PRE_QUERY_FILE_ID  (ULONGLONG)0x0000040000000000
+	#define POST_QUERY_FILE_ID  (ULONGLONG)0x0000080000000000
+
+	//this the IRP_SET_INFORMATION to set the file information.
+	//if you register this class,the filter driver will intercept all requests to set the file information.
+	//if you want to only intercept specific set information, you can register below specific class.
 	PRE_SET_INFORMATION					= 0x00100000,
 	POST_SET_INFORMATION				= 0x00200000,
+
+	//this the IRP_SET_INFORMATION with specific info class to set file size
+	#define PRE_SET_FILE_SIZE  (ULONGLONG)0x0000400000000000
+	#define POST_SET_FILE_SIZE  (ULONGLONG)0x0000800000000000
+
+	//this the IRP_SET_INFORMATION with specific info class to set file basic information
+	#define PRE_SET_FILE_BASIC_INFO  (ULONGLONG)0x0001000000000000
+	#define POST_SET_FILE_BASIC_INFO  (ULONGLONG)0x0002000000000000
+
+	//this the IRP_SET_INFORMATION with specific info class to set file standard information
+	#define PRE_SET_FILE_STANDARD_INFO  (ULONGLONG)0x0004000000000000
+	#define POST_SET_FILE_STANDARD_INFO  (ULONGLONG)0x0008000000000000
+
+	//this the IRP_SET_INFORMATION with specific info class to set file network information
+	#define PRE_SET_FILE_NETWORK_INFO  (ULONGLONG)0x0010000000000000
+	#define POST_SET_FILE_NETWORK_INFO  (ULONGLONG)0x0020000000000000
+
+	//this the IRP_SET_INFORMATION with specific info class to rename the file
+	#define PRE_RENAME_FILE   (ULONGLONG)0x0040000000000000
+	#define POST_RENAME_FILE  (ULONGLONG)0x0080000000000000
+
+	//this the IRP_SET_INFORMATION with specific info class to delete the file
+	#define PRE_DELETE_FILE  (ULONGLONG)0x0100000000000000
+	#define POST_DELETE_FILE  (ULONGLONG)0x0200000000000000
+
+	//this the IRP_MJ_DIRECTORY_CONTROL to query the file directory information.
 	PRE_DIRECTORY						= 0x00400000,
 	POST_DIRECTORY						= 0x00800000,
+
+	//this the IRP_MJ_QUERY_SECURITY to query the file security information.
 	PRE_QUERY_SECURITY					= 0x01000000,	
 	POST_QUERY_SECURITY					= 0x02000000,
+
+	//this the IRP_MJ_SET_SECURITY to set the file security information.
 	PRE_SET_SECURITY					= 0x04000000,
 	POST_SET_SECURITY					= 0x08000000,
+
+	//this the IRP_MJ_CLEANUP to close the file handle.
 	PRE_CLEANUP							= 0x10000000,
 	POST_CLEANUP						= 0x20000000,
+
+	//this the IRP_MJ_CLOSE to close the file I/O.
 	PRE_CLOSE							= 0x40000000,
 	POST_CLOSE							= 0x80000000UL, 
 
-}MessageType;
+}IOCallbackClass;
 
 //the flags of the access control to the file.
 typedef enum _AccessFlag
@@ -530,9 +894,17 @@ typedef enum _AccessFlag
     /// </summary>
     ALLOW_COPY_PROTECTED_FILES_OUT = 0x00800000,
     /// <summary>
-    /// Allow the file to be executed.
+    /// Allow the file to be mapped.
     /// </summary>
     ALLOW_FILE_MEMORY_MAPPED = 0x01000000,
+	/// <summary>
+    /// if the encryption filter rule is enabled, it will encrypt unencrypted data on read when the flag value is 0.
+    /// </summary>
+    DISABLE_ENCRYPT_DATA_ON_READ = 0x02000000, 
+	/// <summary>
+	/// prevent the protected files from being copying out to the USB when the flag value is 0.
+	/// </summary>
+	ALLOW_COPY_PROTECTED_FILES_TO_USB = 0x04000000, 
 	/// <summary>
     /// If it is not exclude filter rule,the access flag can't be 0, at least you need to include this flag
     /// for filter driver with least access right to the file.
@@ -544,85 +916,6 @@ typedef enum _AccessFlag
 	ALLOW_MAX_RIGHT_ACCESS	= 0xfffffff0,
 	
 }AccessFlag;
-
-
-typedef enum _ConnectionPortType 
-{
-    ClientMessagePort       = 0, 
-    ClientControlPort	    = 1,     
-
-} ConnectionPortType;
-
-typedef enum _EVENT_OUTPUT_TYPE 
-{
-    OUTPUT_NONE			= 0, 
-    OUTPUT_DEBUGGER	    = 1,     
-	OUTPUT_EVENTLOG	    = 2,     
-	OUTPUT_FILE			= 3,     
-
-} EVENT_OUTPUT_TYPE;
-
-typedef enum _EVENT_LEVEL 
-{
-    EVENT_LEVEL_NONE		=   0,   // Tracing is not on
-	EVENT_LEVEL_CRITICAL    =	1,   // Abnormal exit or termination
-	EVENT_LEVEL_ERROR       =	2,   // Severe errors that need logging
-	EVENT_LEVEL_WARNING     =	3,   // Warnings such as allocation failure
-	EVENT_LEVEL_INFORMATION =	4,   // Includes non-error cases(e.g.,Entry-Exit)
-	EVENT_LEVEL_VERBOSE     =	5,   // Detailed traces from intermediate steps
-
-} EVENT_LEVEL;
-
-//the commands from user mode app to the filter driver.
-typedef enum _ControlType 
-{
-	CONTROL_SET_INTEGER_DATA = 1,
-	CONTROL_SET_STRING_DATA ,
-	CONTROL_REGISTER_REQUEST,
-	CONTROL_ADD_FILTER_RULE ,
-	CONTROL_REMOVE_FILTER_RULE,
-	CONTROL_ADD_EXCLUDED_PID,
-	CONTROL_REMOVE_EXCLUDED_PID,
-	CONTROL_RESET_CONFIG_DATA,
-	CONTROL_GET_FILE_HANDLE,
-	CONTROL_CLOSE_FILE_HANDLE,
-	CONTROL_ADD_INCLUDED_PID,
-	CONTROL_REMOVE_INCLUDED_PID,
-	CONTROL_ADD_PROTECTED_PID,
-	CONTROL_REMOVE_PROTECTED_PID,
-	CONTROL_ADD_BLOCK_SAVEAS_PID,
-	CONTROL_REMOVE_BLOCK_SAVEAS_PID,
-	CONTROL_ADD_INCLUDE_REG_FILTER_ENTRY,
-	CONTROL_ADD_EXCLUDE_REG_FILTER_ENTRY,
-	CONTROL_REMOVE_REG_FILTER_ENTRY,
-	CONTROL_ADD_PROCESS_FILTER_ENTRY,
-	CONTROL_REMOVE_PROCESS_FILTER_ENTRY,
-	CONTROL_ADD_PROCESS_FILE_ACCESS_ENTRY,
-	CONTROL_REMOVE_PROCESS_FILE_ACCESS_ENTRY,
-	CONTROL_MAX_TYPE,       
-
-} ControlType;
-
-// the user mode app sends the integer data to filter driver, this is the index of the integer data.
-typedef enum _DataControlId 
-{
-	FILTER_TYPE_ID = 1,			//The filter driver type.
-	EVENT_OUTPUT_TYPE_ID,		//Control send the event output type.
-	EVENT_LEVEL_ID,				//Control send event level.
-	EVENT_FLAGS_ID,				//Control send the event modules
-	CONNECTION_TIMEOUT_ID,		//Control send client connection timout in seconds.
-	BOOLEAN_CONFIG_ID,			//All the boolean config data setting
-	WAIT_BLOCK_DATA_INTERVAL,	//the interval time in milliseconds to wait for the block data download
-	WAIT_BLOCK_DATA_TIMEOUT,	//the timeout in milliseconds to wait for the block data ready
-	DIR_CACHE_TIMEOUT,			//the directory cache file list time to live in milliseconds
-	MAX_TOTAL_DIR_CACHE_SIZE,   //the total size of the dir info buffer
-	DELETE_NO_ACCESS_DIR_INFO_IN_SECONDS,   //delete the directory info if there are no access more than this value.
-	MESSAGE_IN_QUEUE_TTL_IN_SECONDS,		//set the message in queue time to live.
-	MAX_MESSAGES_IN_QUEUE, //set the maximum messages can be kept in queue.
-
-	MAX_DATA_CONTROL_ID,
-
-} DataControlId;
 
 
 
@@ -674,82 +967,184 @@ typedef enum _BooleanConfig
     /// if it is enabled, it will reopen the file when rehydration of the stub file.
     /// </summary>
     ENABLE_REOPEN_FILE_ON_REHYDRATION = 0x00000400,    
+	/// <summary>
+	/// if it is true, it will enable the buffer for monitor events and send asynchronously, 
+	/// or the monitor event will wait till the service picks up the events.
+	/// </summary>
+	ENABLE_MONITOR_EVENT_BUFFER = 0x00000800,
+		/// <summary>
+	/// if it is true, it will send the event when it was blocked by the config setting.
+	/// </summary>
+	ENABLE_SEND_DENIED_EVENT = 0x00001000,
+	/// <summary>
+	/// if it is true, and the write access is false,the write will return success 
+	/// with zero data being written to the file, and send the write data to the user mode.
+	//  this flag is for custom usage.
+	/// </summary>
+	ENABLE_WRITE_WITH_ZERO_DATA_AND_SEND_DATA = 0x00002000,
+	/// <summary>
+	/// if it is true, the portable massive storage will be treated as USB.
+	//	this is for the volume control flag for BLOCK_USB_READ,BLOCK_USB_WRITE
+	/// </summary>
+	DISABLE_REMOVABLE_MEDIA_AS_USB = 0x00004000,
+	/// <summary>
+	/// if it is true, it will block the encrypted file to be renamed to different folder.
+	/// </summary>
+	DISABLE_RENAME_ENCRYPTED_FILE = 0x00008000,
+    /// <summary>
+    /// if it is true, it will disable the file synchronization for file reading for CloudTier.
+    /// </summary>
+    DISABLE_FILE_SYNCHRONIZATION = 0x00010000,
+    /// <summary>
+    /// if it is true, the data protection will continue even the service process is stopped.
+    /// </summary>
+    ENABLE_PROTECTION_IF_SERVICE_STOPPED = 0x00020000,
+    /// <summary>
+    /// if it is true and write encrypt info to cache is enabled, it will signal the system thread to write cache data to disk right away.
+    /// </summary>
+    ENABLE_SIGNAL_WRITE_ENCRYPT_INFO_EVENT = 0x00020000,
+    /// <summary>
+    ///enable this feature when accessFlag "ALLOW_SAVE_AS" or "ALLOW_COPY_PROTECTED_FILES_OUT" was disabled.
+    ///by default we don't enable this feature, because of the drawback of these two flags were disabled 
+    ///which will block all new file creation of the process which was read the protected files.
+    /// </summary>
+    ENABLE_BLOCK_SAVE_AS_FLAG = 0x00040000,
 
 } BooleanConfig;
-
-//this is the data structure which send control message to kernel from user mode.
-//first it needs to set the control type which shows as above enumeration.
-//the second is the control id for integer data.
-//the third is the integer data.
-typedef struct _CONTROL_DATA 
-{
-	ULONG		ControlType;
-	ULONG		ControlId;
-	LONGLONG	IntegerData;
-	LONGLONG	IntegerData2;
-	ULONG		StringLength1;
-	WCHAR		StringData1[MAX_PATH];
-	ULONG		StringLength2;
-	WCHAR		StringData2[MAX_PATH];
-	ULONG		StringLength3;
-	WCHAR		StringData3[MAX_PATH];
-	ULONG		KeyLength;
-	UCHAR		Key[MAX_PATH];
-	ULONG		IVLength;
-	UCHAR		IV[16];
-	
-} CONTROL_DATA, *PCONTROL_DATA;
-
-//the file was changed, this is the meta data of the file information.
-typedef struct _FILE_CHANGED_DATA 
-{
-	ULONG		SizeOfEntry;
-	ULONG		FileEventType;
-	LONGLONG	LastWriteTime;
-	ULONG		FileNameLength;
-	WCHAR		FileName[1];
-	//the whole file name path is appended here.
-
-} FILE_CHANGED_DATA, *PFILE_CHANGED_DATA;
 
 
 //this is the data structure of the filter driver sending data to the user mode app.
 typedef struct _MESSAGE_SEND_DATA 
 {
-	ULONG			MessageId;
-	PVOID			FileObject;
-	PVOID			FsContext;
-	ULONG			MessageType;	
-	ULONG			ProcessId;
-    ULONG			ThreadId;   
-	LONGLONG		Offset; // read/write offset 
-	ULONG			Length; //read/write length
-	LONGLONG		FileSize;
-	LONGLONG		TransactionTime;
-	LONGLONG		CreationTime;
-	LONGLONG		LastAccessTime;
-	LONGLONG		LastWriteTime;
-	ULONG			FileAttributes;
-	//The disired access,share access and disposition for Create request.
-	ULONG			DesiredAccess;
-	ULONG			Disposition;
-	ULONG			ShareAccess;
-	ULONG			CreateOptions;
-	ULONG			CreateStatus;
-
-	//For QueryInformation,SetInformation,Directory request it is information class
-	//For QuerySecurity and SetSecurity request,it is securityInformation.
-	ULONG			InfoClass; 
-
-	ULONG			Status;
-	ULONG			FileNameLength;
-	WCHAR			FileName[MAX_FILE_NAME_LENGTH];
-	ULONG			SidLength;
-    UCHAR			Sid[MAX_SID_LENGTH];
-	ULONG			DataBufferLength;
-	UCHAR			DataBuffer[BLOCK_SIZE];
-
-	ULONG			VerificationNumber;
+	 /// <summary>
+    ///the verification number which verifiys the data structure integerity.
+    /// </summary>
+    ULONG VerificationNumber;
+    /// <summary>
+    /// This is the command Id which was sent by filter driver.
+    /// </summary>
+    ULONG FilterCommand;     
+    /// <summary>
+    /// This is the  sequential message Id, just for reference.
+    /// </summary>
+    ULONG MessageId;          
+    /// <summary>
+    /// This the filter rule Id associated to the filter rule.
+    /// </summary>
+    ULONG FilterRuleId;       
+    /// <summary>
+    /// This is the ip address of the remote computer when it accesses the file via SMB.
+    /// it is only effected for win 7 or later OS.
+    /// </summary>
+    WCHAR RemoteIP[INET_ADDR_STR_LEN];	
+    /// <summary>
+    ///the address of FileObject,it is equivalent to file handle,it is unique per file stream open.
+    /// </summary>
+    PVOID FileObject;       
+    /// <summary>
+    ///the address of FsContext,it is unique per file.
+    /// </summary>
+    PVOID FsContext;        
+    /// <summary>
+    ///the message type of the file I/O, registry class.
+    /// </summary>
+    LONGLONG MessageType;        
+    /// <summary>
+    ///the process ID for the process associated with the thread that originally requested the I/O operation.
+    /// </summary>
+    ULONG ProcessId;          
+    /// <summary>
+    ///the thread ID which requested the I/O operation.
+    /// </summary>
+    ULONG ThreadId;           
+    /// <summary>
+    ///the read/write offset.
+    /// </summary>
+    LONGLONG Offset;             
+    /// <summary>
+    ///the read/write length.
+    /// </summary>
+    ULONG Length;             
+    /// <summary>
+    ///the size of the file for the I/O operation.
+    /// </summary>
+    LONGLONG FileSize;           
+    /// <summary>
+    ///the transaction time in UTC of this request.
+    /// </summary>
+    LONGLONG TransactionTime;    
+    /// <summary>
+    ///the creation time in UTC of the file.
+    /// </summary>
+    LONGLONG CreationTime;       
+    /// <summary>
+    ///the last access time in UTC of the file.
+    /// </summary>
+    LONGLONG LastAccessTime;     
+    /// <summary>
+    ///the last write time in UTC of the file.
+    /// </summary>
+    LONGLONG LastWriteTime;      
+    /// <summary>
+    ///the file attributes.
+    /// </summary>
+    ULONG FileAttributes;     
+    /// <summary>
+    ///the DesiredAccess for file open, please reference CreateFile windows API.
+    /// </summary>
+    ULONG DesiredAccess;      
+    /// <summary>
+    ///the Disposition for file open, please reference CreateFile windows API.
+    /// </summary>
+    ULONG Disposition;        
+    /// <summary>
+    ///the SharedAccess for file open, please reference CreateFile windows API.
+    /// </summary>
+    ULONG ShareAccess;       
+    /// <summary>
+    ///the CreateOptions for file open, please reference CreateFile windows API.
+    /// </summary>
+    ULONG CreateOptions;      
+    /// <summary>
+    ///the CreateStatus after file was openned, please reference CreateFile windows API.
+    /// </summary>
+    ULONG CreateStatus;       
+    /// <summary>
+    ///this is the information class for security/directory/information IO 
+    /// </summary>
+    ULONG InfoClass;          
+    /// <summary>
+    ///the I/O status which returned from file system.
+    /// </summary>
+    ULONG Status;
+    /// <summary>
+    /// the return I/O (read/write) length 
+    /// </summary>
+    ULONG ReturnLength;
+    /// <summary>
+    ///the file name length in byte.
+    /// </summary>
+    ULONG FileNameLength;     
+    /// <summary>
+    ///the file name of the I/O operation.
+    /// </summary>
+   	WCHAR FileName[MAX_FILE_NAME_LENGTH];
+    /// <summary>
+    ///the length of the security identifier.
+    /// </summary>
+    ULONG SidLength;          
+    /// <summary>
+    ///the security identifier data.
+    /// </summary>
+    UCHAR Sid[MAX_SID_LENGTH];               
+    /// <summary>
+    ///the data buffer length.
+    /// </summary>
+    ULONG DataBufferLength;   
+    /// <summary>
+    ///the data buffer which contains read/write/query information/set information data.
+    /// </summary>
+    UCHAR DataBuffer[MAX_BUFFER_SIZE];	  
 
 } MESSAGE_SEND_DATA, *PMESSAGE_SEND_DATA;
 
@@ -758,30 +1153,7 @@ typedef struct _MESSAGE_SEND_DATA
 //the structure of the new creating process	information
 typedef struct _PROCESS_INFO
 {
-	 /// <summary>
-    ///this is the request sequential number. 
-    /// </summary>
-    ULONG MessageId;
 	
-	//reserve data
-	PVOID	Reserve1;
-	PVOID	Reserve2;
-    /// <summary>
-    ///the process message  type.
-    /// </summary>
-    ULONG MessageType;
-    /// <summary>
-    ///the transaction time in UTC of this message.
-    /// </summary>
-    LONGLONG TransactionTime;
-    /// <summary>
-    //the current process ID of the process.
-    /// </summary>
-    ULONG ProcessId;
-    /// <summary>
-    ///the thread ID of the current operation thread.
-    /// </summary>
-    ULONG ThreadId;
     /// <summary>
     ///The process ID of the parent process for the new process. Note that the parent process is not necessarily the same process as the process that created the new process.  
     /// </summary>
@@ -795,7 +1167,7 @@ typedef struct _PROCESS_INFO
     /// </summary>
     ULONG CreatingThreadId;
     /// <summary>
-    ///An ACCESS_MASK value that specifies the access rights to grant for the handle
+    ///An ACCESS_MASK value that specifies the access rights to grant for the handle for OB_PRE_CREATE_HANDLE_INFORMATION.
     /// </summary>
     ULONG DesiredAccess;
     /// <summary>
@@ -807,38 +1179,13 @@ typedef struct _PROCESS_INFO
     /// </summary>
     ULONG FileOpenNameAvailable;
     /// <summary>
-    ///the length of the security identifier.
-    /// </summary>
-    ULONG SidLength;
-    /// <summary>
-    ///the security identifier data.
-    /// </summary>
-    UCHAR Sid[MAX_SID_LENGTH];
-    /// <summary>
-    /// The length of the image file name.
-    /// </summary>
-    ULONG ImageFileNameLength;
-    /// <summary>
-    /// The file name of the executable. If the FileOpenNameAvailable member is TRUE, the string specifies the exact file name that is used to open the executable file. 
-    /// If FileOpenNameAvailable is FALSE, the operating system might provide only a partial name.
-    /// </summary>
-    WCHAR	ImageFileName[MAX_FILE_NAME_LENGTH];
-    /// <summary>
     /// The length of the command line.
     /// </summary>
     ULONG CommandLineLength;
     /// <summary>
     /// The command that is used to execute the process.
     /// </summary>
-    WCHAR	CommandLine[MAX_FILE_NAME_LENGTH];
-	/// <summary>
-	///the status which returned from file system.
-	/// </summary>
-	ULONG Status;    
-    /// <summary>
-    ///the verification number which verifiys the data structure integerity. 
-    /// </summary>
-    ULONG VerificationNumber;
+    WCHAR	CommandLine[MAX_FILE_NAME_LENGTH];	
 
 } PROCESS_INFO, *PPROCESS_INFO;
 
@@ -864,8 +1211,47 @@ typedef enum _FileEventType
 	FILE_SECURITY_CHANGED			= 0x00000200,
 	FILE_INFO_CHANGED				= 0x00000400,
 	FILE_WAS_READ					= 0x00000800,
+    FILE_WAS_COPIED                 = 0x00001000,
 
 } FileEventType, *PFileEventType;
+
+//This is the enumeration of the file copy flags.
+typedef enum _FILE_COPY_FLAG
+{
+    //this is the source file for copy in the open.
+    CREATE_FLAG_FILE_SOURCE_OPEN_FOR_COPY = 0x00000001,
+    //this is the dest file for copy in the open.
+    CREATE_FLAG_FILE_DEST_OPEN_FOR_COPY = 0x00000002,
+    //this is the source file read for file copy.
+    READ_FLAG_FILE_SOURCE_FOR_COPY = 0x00000004,
+    //this is the destination file write for file copy.
+    WRITE_FLAG_FILE_DEST_FOR_COPY = 0x00000008,
+
+} FILE_COPY_FLAG;
+
+//
+// Define the various device characteristics flags
+//
+//typedef enum _File_Characteristics
+//{
+//	FILE_REMOVABLE_MEDIA						=	0x00000001,
+//	FILE_READ_ONLY_DEVICE                       =	0x00000002,
+//	FILE_FLOPPY_DISKETTE                        =	0x00000004,
+//	FILE_WRITE_ONCE_MEDIA                       =	0x00000008,
+//	FILE_REMOTE_DEVICE                          =	0x00000010,
+//	FILE_DEVICE_IS_MOUNTED                      =	0x00000020,
+//	FILE_VIRTUAL_VOLUME                         =	0x00000040,
+//	FILE_AUTOGENERATED_DEVICE_NAME              =	0x00000080,
+//	FILE_DEVICE_SECURE_OPEN                     =	0x00000100,
+//	FILE_CHARACTERISTIC_PNP_DEVICE              =	0x00000800,
+//	FILE_CHARACTERISTIC_TS_DEVICE               =	0x00001000,
+//	FILE_CHARACTERISTIC_WEBDAV_DEVICE           =	0x00002000,
+//	FILE_CHARACTERISTIC_CSV                     =	0x00010000,
+//	FILE_DEVICE_ALLOW_APPCONTAINER_TRAVERSAL    =	0x00020000,
+//	FILE_PORTABLE_DEVICE                        =	0x00040000,
+//
+//}File_Characteristics,*PFile_Characteristics;
+
 
 
 //This is the return data structure from user mode to the filter driver.
@@ -905,17 +1291,25 @@ typedef struct _MESSAGE_REPLY_DATA
   
 } MESSAGE_REPLY_DATA, *PMESSAGE_REPLY_DATA;
 
-
 #define STATUS_ACCESS_DENIED				0xC0000022L
 
+/// <summary>
+/// install the filter driver service, it request the administrator privilege
+/// </summary>
 extern "C" __declspec(dllexport) 
-BOOL
+BOOL 
 InstallDriver();
 
+/// <summary>
+/// uninstall the filter driver service. 
+/// </summary>
 extern "C" __declspec(dllexport) 
 BOOL
 UnInstallDriver();
 
+/// <summary>
+/// set the registration key to enable the filter driver service.
+/// </summary>
 extern "C" __declspec(dllexport) 
 BOOL
 SetRegistrationKey(char* key);
@@ -926,6 +1320,12 @@ typedef BOOL (__stdcall *Proto_Message_Callback)(
 
 typedef VOID (__stdcall *Proto_Disconnect_Callback)();
 
+/// <summary>
+/// Create the filter driver connection with callback settings
+/// </summary>
+/// <param name="threadCount">the number of working threads waitting for the callback message</param>
+/// <param name="filterCallback">the callback function</param>
+/// <param name="disconnectCallback">the disconnect callback function</param>
 extern "C" __declspec(dllexport) 
 BOOL
 RegisterMessageCallback(
@@ -949,6 +1349,9 @@ extern "C" __declspec(dllexport)
 BOOL
 SetStringData(ULONG stringControlId, WCHAR* stringData);
 
+/// <summary>
+/// reset the filter driver config settings to the default value.
+/// </summary>
 extern "C" __declspec(dllexport)
 BOOL
 ResetConfigData();
@@ -965,105 +1368,309 @@ extern "C" __declspec(dllexport)
 BOOL
 SetFilterType(ULONG FilterType);
 
+/// <summary>
+/// set the filter driver boolean config setting based on the enum booleanConfig
+/// </summary>
 extern "C" __declspec(dllexport)  
 BOOL
 SetBooleanConfig(ULONG booleanConfig);
 
+/// <summary>
+/// set the maximum monitor event buffer size if monitorBuffer was enabled.
+/// </summary>
+extern "C" __declspec(dllexport) 
+BOOL
+SetMaxMonitorEventBuffersize(ULONG maxBufferSize);
+
+/// <summary>
+/// set the maiximun wait time of the filter driver sending message to service.
+/// </summary>
 extern "C" __declspec(dllexport)  
 BOOL
 SetConnectionTimeout(ULONG TimeOutInSeconds);
 
+extern "C" __declspec(dllexport)  
+BOOL
+SetVolumeControlFlag(ULONG volumeControlFlag);
+
+//obsolete
 extern "C" __declspec(dllexport) 
 BOOL 
 AddFilterRule(ULONG AccessFlag, WCHAR* FilterMask, WCHAR* FilterMask2 = NULL,ULONG keyLength = 0,PUCHAR key = NULL);
 
+//obsolete
 extern "C" __declspec(dllexport) 
 BOOL 
 AddNewFilterRule(ULONG accessFlag, WCHAR* filterMask,BOOL isResident = FALSE);
 
+/// <summary>
+/// Add the new filter rule to the filter driver.
+/// </summary>
+/// <param name="accessFlag">access control rights of the file IO to the files which match the filter mask</param>
+/// <param name="filterMask">the filter rule file filter mask, it must be unique.</param>
+/// <param name="isResident">if it is true, the filter rule will be added to the registry, get protection in boot time.</param>
+/// <param name="filterRuleId">the id to identify the filter rule, it will show up in messageId field of messageSend structure if the callback is registered</param>
 extern "C" __declspec(dllexport) 
 BOOL 
 AddFileFilterRule(ULONG accessFlag, WCHAR* filterMask,BOOL isResident = FALSE, ULONG filterRuleId = 0 );
 
+/// <summary>
+/// Remove the filter rule from the filter driver.
+/// </summary>
+/// <param name="filterMask">the filter rule file filter mask</param>
+extern "C" __declspec(dllexport) 
+BOOL 
+RemoveFilterRule(WCHAR* FilterMask);
+
+/// <summary>
+///Set an encryption folder, every encrypted file has the unique iv key, 
+///the encrypted information will be appended to the file as an header, 
+///the filter driver will know if the file was encrypted by checking the header.
+/// </summary>
 extern "C" __declspec(dllexport) 
 BOOL 
 AddEncryptionKeyToFilterRule(WCHAR* filterMask,ULONG encryptionKeyLength,PUCHAR encryptionKey);
 
+/// <summary>
+///Set an encryption folder, all encrypted files use the same encryption key and IV key. 
+/// </summary>
 extern "C" __declspec(dllexport) 
 BOOL 
 AddEncryptionKeyAndIVToFilterRule(WCHAR* filterMask,ULONG encryptionKeyLength,PUCHAR encryptionKey,ULONG ivLength, PUCHAR iv);
-
+/// <summary>
+/// reparse the file open to the other file if the file matches the file filter mask.
+/// 
+///For example:
+///FilterMask = c:\test\*txt
+///ReparseFilterMask = d:\reparse\*doc
+///If you open file c:\test\MyTest.txt, it will reparse to the file d:\reparse\MyTest.doc.
+/// </summary>
+/// <param name="filterMask">the filter rule file filter mask</param>
+/// <param name="reparseFileFilterMask">reparse file filter mask</param>
 extern "C" __declspec(dllexport) 
 BOOL 
 AddReparseFileMaskToFilterRule(WCHAR* filterMask,  WCHAR* reparseFilterMask);
-
+/// <summary>
+/// Hide the files from the browsing file list for the filter rule.
+/// </summary>
+/// <param name="filterMask">the filter rule file filter mask.</param>
+/// <param name="hiddenFileFilterMask">the file filter mask for the hidden files.</param>
 extern "C" __declspec(dllexport) 
 BOOL 
 AddHiddenFileMaskToFilterRule(WCHAR* filterMask,  WCHAR* hiddenFileFilterMask);
+
+/// <summary>
+/// Exclude the file IO from this filter rule if the files match the excludeFileFilterMask.
+/// </summary>
 extern "C" __declspec(dllexport) 
 BOOL 
 AddExcludeFileMaskToFilterRule(WCHAR* filterMask,  WCHAR* excludeFileFilterMask);
 
-extern "C" __declspec(dllexport) 
-BOOL 
-AddExcludeProcessIdToFilterRule(WCHAR* filterMask, ULONG excludePID);
-
+/// <summary>
+/// only manage the IO of the filter rule for the processes in the included process id list 
+/// </summary>
+/// <param name="filterMask">the file filter mask of the filter rule</param>
+/// <param name="includeProcessId">the included process Id</param>
 extern "C" __declspec(dllexport) 
 BOOL 
 AddIncludeProcessIdToFilterRule(WCHAR* filterMask, ULONG includePID);
 
+/// <summary>
+/// skip the IO of the filter rule for the processes in the excluded process id list
+/// </summary>
+/// <param name="filterMask">the file filter mask of the filter rule</param>
+/// <param name="excludeProcessId">the excluded process Id</param>
 extern "C" __declspec(dllexport) 
 BOOL 
-RegisterEventTypeToFilterRule(WCHAR* filterMask, ULONG eventType);
+AddExcludeProcessIdToFilterRule(WCHAR* filterMask, ULONG excludePID);
 
-extern "C" __declspec(dllexport) 
-BOOL 
-RegisterMoinitorIOToFilterRule(WCHAR* filterMask, ULONG registerIO);
-
-extern "C" __declspec(dllexport) 
-BOOL 
-RegisterControlIOToFilterRule(WCHAR* filterMask, ULONG registerIO);
-
-extern "C" __declspec(dllexport) 
-BOOL 
-AddRegisterIOFilterToFilterRule(WCHAR* filterMask, ULONG filterByDesiredAccess, ULONG filterByDisposition,ULONG filterByCreateOptions);
-
+/// <summary>
+/// only manage the IO of the filter rule for the processes in the included process list 
+/// </summary>
+/// <param name="filterMask">the file filter mask of the filter rule</param>
+/// <param name="processName">the include process name filter mask, process name format:notepad.exe</param>
 extern "C" __declspec(dllexport) 
 BOOL 
 AddIncludeProcessNameToFilterRule(WCHAR* filterMask,  WCHAR* processName);
 
+/// <summary>
+/// skip the IO of the filter rule for the processes in the excluded process list
+/// </summary>
+/// <param name="filterMask">the file filter mask of the filter rule</param>
+/// <param name="processName">the include process name filter mask</param>
 extern "C" __declspec(dllexport) 
 BOOL 
 AddExcludeProcessNameToFilterRule(WCHAR* filterMask,  WCHAR* processName);
 
+/// <summary>
+///  only manage the IO of the filter rule for user name in the included user name list 
+/// </summary>
+/// <param name="filterMask">the file filter mask of the filter rule</param>
+/// <param name="userName">the included user name, format:domainName(or computerName)\userName.exe</param>
 extern "C" __declspec(dllexport) 
 BOOL 
 AddIncludeUserNameToFilterRule(WCHAR* filterMask,  WCHAR* userName);
 
+/// <summary>
+///skip the IO of the filter rule for user name in the excluded user name list 
+/// </summary>
+/// <param name="filterMask">the file filter mask of the filter rule</param>
+/// <param name="userName">the excluded user name, format:domainName(or computerName)\userName.exe</param>
 extern "C" __declspec(dllexport) 
 BOOL 
 AddExcludeUserNameToFilterRule(WCHAR* filterMask,  WCHAR* processName);
 
+/// <summary>
+/// Filter the I/O based on the file create options,the IO will be skipped if the filter option is not 0
+/// and the file create options don't match the filter.
+/// </summary>
+/// <param name="filterMask">the file filter mask of the filter rule</param>
+/// <param name="filterByDesiredAccess">if it is not 0, the filter driver will check if the file creation option "DesiredAccess" matches the filter</param>
+/// <param name="filterByDisposition">if it is not 0, the filter driver will check if the file creation option "Disposition" matches the filter</param>
+/// <param name="filterByCreateOptions">if it is not 0, the filter driver will check if the file creation option "CreateOptions" matches the filter</param>
+extern "C" __declspec(dllexport) 
+BOOL 
+AddCreateFilterToFilterRule(WCHAR* filterMask, ULONG filterByDesiredAccess, ULONG filterByDisposition,ULONG filterByCreateOptions);
+
+
+/// <summary>
+///obsolete API,use RegisterFileChangedEventsToFilterRule instead.
+/// Register the file I/O event types for the filter rule, get the notification when the I/O was triggered
+/// after the file handle was closed.
+/// </summary>
+/// <param name="filterMask">the file filter mask of the filter rule</param>
+/// <param name="eventType">the I/O event types,reference the FileEventType enumeration.</param>
+extern "C" __declspec(dllexport) 
+BOOL 
+RegisterEventTypeToFilterRule(WCHAR* filterMask, ULONG eventType);
+
+/// <summary>
+/// Register the file changed events for the filter rule, get the notification when the I/O was triggered
+/// after the file handle was closed.
+/// </summary>
+/// <param name="filterMask">the file filter mask of the filter rule</param>
+/// <param name="eventType">the I/O event types,reference the FileEventType enumeration.</param>
+extern "C" __declspec(dllexport) 
+BOOL 
+RegisterFileChangedEventsToFilterRule(WCHAR* filterMask, ULONG eventType);
+
+/// <summary>
+/// Register the callback I/O for monitor filter driver to the filter rule.
+/// </summary>
+/// <param name="filterMask">the file filter mask of the filter rule</param>
+/// <param name="registerIO">the specific I/Os you want to monitor</param>
+extern "C" __declspec(dllexport) 
+BOOL 
+RegisterMonitorIOToFilterRule(WCHAR* filterMask, ULONGLONG registerIO);
+
+/// <summary>
+/// Register the callback I/O for control filter driver to the filter rule, you can change, block and pass the I/O
+/// in your callback funtion.
+/// </summary>
+/// <param name="filterMask">the file filter mask of the filter rule</param>
+/// <param name="registerIO">the specific I/Os you want to monitor or control</param>
+extern "C" __declspec(dllexport) 
+BOOL 
+RegisterControlIOToFilterRule(WCHAR* filterMask, ULONGLONG registerIO);
+
+/// <summary>
+/// Set the access rights to the specific process
+/// </summary>
+/// <param name="filterMask">the file filter mask of the filter rule</param>
+/// <param name="processName">the process name will be added the access rights, e.g. notepad.exe or c:\windows\*.exe</param>
+/// <param name="accessFlags">the access rights</param>
 extern "C" __declspec(dllexport) 
 BOOL 
 AddProcessRightsToFilterRule(WCHAR* filterMask,  WCHAR* processName, ULONG accessFlags);
 
+/// <summary>
+/// Remove the acces right setting for specific processes from filter rule
+/// </summary>
+/// <param name="filterMask">tthe filter rule file filter mask</param>
+/// <param name="processName">the process name filter mask</param>
 extern "C" __declspec(dllexport) 
 BOOL
 RemoveProcessRightsFromFilterRule(WCHAR* filterMask,  WCHAR* processName);
 
+/// <summary>
+/// Set the access control flags to process with the processId
+/// </summary>
+/// <param name="filterMask">the filter rule file filter mask</param>
+/// <param name="processId">the process Id which will be added the access control flags</param>
+/// <param name="accessFlags">the access control flags</param>
 extern "C" __declspec(dllexport) 
 BOOL 
 AddProcessIdRightsToFilterRule(WCHAR* filterMask,  ULONG processId, ULONG accessFlags);
 
+/// <summary>
+/// Remove the acces right setting for specific process from filter rule
+/// </summary>
+/// <param name="filterMask">the filter rule file filter mask</param>
+/// <param name="processName">the process Id</param>
 extern "C" __declspec(dllexport) 
 BOOL 
 RemoveProcessIdRightsFromFilterRule(WCHAR* filterMask,  ULONG processId);
 
+/// <summary>
+/// Set the access control rights to specific users
+/// </summary>
+/// <param name="filterMask">the filter rule file filter mask</param>
+/// <param name="userName">the user name you want to set the access right</param>
+/// <param name="accessFlags">the access rights</param>
 extern "C" __declspec(dllexport) 
 BOOL 
 AddUserRightsToFilterRule(WCHAR* filterMask,  WCHAR* userName, ULONG accessFlags);
 
+/// <summary>
+/// Get sha256 hash of the file, you need to allocate the 32 bytes array to get the sha256 hash.
+/// hashBytesLength is the input byte array length, and the outpou lenght of the hash.
+/// </summary>
+extern "C" __declspec(dllexport) 
+BOOL
+Sha256HashFile(
+	LPCTSTR					sourceFileName,
+	BYTE*					hashBytes,
+	ULONG*					hashBytesLength);
+
+/// <summary>
+/// Add the access rights to the process which has the same sha256 hash as the setting.
+/// </summary>
+/// <param name="filterMask">The filter rule file filter mask.</param>
+/// <param name="imageSha256">the sha256 hash of the executable binary file.</param>
+/// <param name="hashLength">the length of the sha256 hash, by default is 32.</param>
+/// <param name="accessFlags">the access flags for the setting process.</param>
+/// <returns>return true if it is succeeded.</returns>
+extern "C" __declspec(dllexport) 
+BOOL 
+AddSha256ProcessAccessRightsToFilterRule(
+	WCHAR* filterMask, 
+	PUCHAR imageSha256,
+	ULONG hashLength, 
+	ULONG accessFlags);
+
+/// <summary>
+/// Add the access rights of the process which was signed with the code certificate
+/// to the filter rule.
+/// </summary>
+/// <param name="filterMask">The filter rule file filter mask.</param>
+/// <param name="imageSha256">the sha256 hash of the executable binary file.</param>
+/// <param name="hashLength">the length of the sha256 hash, by default is 32.</param>
+/// <param name="accessFlags">the access flags for the setting process.</param>
+/// <returns>return true if it is succeeded.</returns>
+extern "C" __declspec(dllexport) 
+BOOL 
+AddSignedProcessAccessRightsToFilterRule(
+	WCHAR* filterMask, 
+	WCHAR* certificateName,
+	ULONG lengthOfCertificate, 
+	ULONG accessFlags);
+
+/// <summary>
+/// Add the boolean config setting to a filter rule.
+/// Reference BooleanConfig settings
+/// </summary>
+/// <param name="filterMask">the filter rule file filter mask</param>
+/// <param name="booleanConfig">the boolean config setting</param>
 extern "C" __declspec(dllexport) 
 BOOL 
 AddBooleanConfigToFilterRule(WCHAR* filterMask, ULONG booleanConfig);
@@ -1071,10 +1678,6 @@ AddBooleanConfigToFilterRule(WCHAR* filterMask, ULONG booleanConfig);
 extern "C" __declspec(dllexport) 
 BOOL 
 RemoveBooleanConfigFromFilterRule(WCHAR* filterMask);
-
-extern "C" __declspec(dllexport) 
-BOOL 
-RemoveFilterRule(WCHAR* FilterMask);
 
 extern "C" __declspec(dllexport) 
 BOOL 
@@ -1279,10 +1882,8 @@ AESEncryptDecryptBuffer(
 	ULONG					ivLength);
 
 extern "C" __declspec(dllexport) 
-BOOL
-GetUniqueComputerId(
-	BYTE*					buffer,
-	PULONG					bufferLength  );
+ULONG
+GetComputerId();
 
 extern "C" __declspec(dllexport) 
 BOOL
@@ -1291,24 +1892,48 @@ ActivateLicense(
 	ULONG					bufferLength);
 
 
+/// <summary>
+/// Add registry access control filter entry with process name filter mask, user name filter mask and registry
+/// key filter mask
+/// </summary>
+/// <param name="processNameLength">The length of the process name string in bytes</param>
+/// <param name="processName">The process name to be filtered, all processes if it is '*' </param>
+/// <param name="processId">set the processId if you want filter with id instead of the process name</param>
+/// <param name="userNameLength">the user name length if you want to filter the user name</param>
+/// <param name="userName">the user name filter mask</param>
+/// <param name="registryKeyNameLength">set the registry key name filter if you want to filter by the key name</param>
+/// <param name="registryKeyNameFilterMask">the registry key name filter mask</param>
+/// <param name="accessFlag">The access control flag to the registry</param>
+/// <param name="regCallbackClass">The registered callback registry access class</param>
+/// <param name="isExcludeFilter">Skip all the registry access from this process filter mask if it is true.</param>
 extern "C" __declspec(dllexport) 
 BOOL
-AddRegistryFilterRule(
+AddRegistryFilterRule(	    
 	ULONG		prcoessNameLength,
-	WCHAR*		processNameFilterMask, 
-	ULONG		processId,
+	WCHAR*		processName,
+	ULONG		processId, 
 	ULONG		userNameLength,
-	WCHAR*		userNameFilterMask, 
+	WCHAR*		userName, 
 	ULONG		keyNameLength,
-	WCHAR*		keyNameFilterMask, 
+	WCHAR*		keyName, 
 	ULONG		accessFlag,
 	ULONGLONG	regCallbackClass,
-	BOOL		isExcludeFilter );
+	BOOL		isExcludeFilter,
+	ULONG		filterRuleId);
 
+/// <summary>
+/// Add registry access control filter entry with process name, if process name filter mask matches the proces,
+/// it will set the access flag to the process.
+/// </summary>
+/// <param name="processNameLength">The length of the process name string in bytes</param>
+/// <param name="processName">The process name to be filtered, all processes if it is '*' </param>
+/// <param name="accessFlag">The access control flag to the registry</param>
+/// <param name="regCallbackClass">The registered callback registry access class</param>
+/// <param name="isExcludeFilter">Skip all the registry access from this process filter mask if it is true.</param>
 extern "C" __declspec(dllexport) 
 BOOL
 AddRegistryFilterRuleByProcessName(
-	ULONG		prcoessNameLength,
+	ULONG		processNameLength,
 	WCHAR*		processName, 
 	ULONG		accessFlag,
 	ULONGLONG	regCallbackClass,
@@ -1316,7 +1941,7 @@ AddRegistryFilterRuleByProcessName(
 
 extern "C" __declspec(dllexport) 
 BOOL
-AddRegistryFilterRuleById(
+AddRegistryFilterRuleByProcessId(
 	ULONG		processId,
 	ULONG		accessFlag,
 	ULONGLONG	regCallbackClass,
@@ -1324,15 +1949,22 @@ AddRegistryFilterRuleById(
 
 extern "C" __declspec(dllexport) 
 BOOL
-RemoveRegFilterEntryByProcessId(
+RemoveRegistryFilterRuleByProcessId(
 	ULONG		processId );
 
 extern "C" __declspec(dllexport) 
 BOOL
-RemoveRegFilterEntryByProcessName(
+RemoveRegistryFilterRuleByProcessName(
 	ULONG		prcoessNameLength,
 	WCHAR*		processName );
 
+/// <summary>
+/// Add the process filter entry,get notification of new process/thread creation or termination.
+/// prevent the unauthorized excutable binaries from running.
+/// </summary>
+/// <param name="processNameMaskLength">the process name mask length</param>
+/// <param name="processNameMask">the process name mask, i.e. c:\myfolder\*.exe</param>
+/// <param name="controlFlag">the control flag of the process</param>
 extern "C" __declspec(dllexport) 
 BOOL
 AddProcessFilterRule(	
@@ -1347,14 +1979,14 @@ RemoveProcessFilterRule(
 	ULONG		prcoessNameMaskLength,
 	WCHAR*		processNameMask );
 
-extern "C" __declspec(dllexport) 
-BOOL
-RegisterIOToProcessName(
-	ULONG  processNameMaskLength,
-	WCHAR* processNameMask,
-	ULONG  monitorIOs,
-	ULONG  controlIOs);
-
+/// <summary>
+/// Add the file control access rights to the process
+/// </summary>
+/// <param name="processNameMaskLength">the length of the process name filter mask</param>
+/// <param name="processNameMask">the process name filter mask</param>
+/// <param name="fileNameMaskLength">the length of the file name filter mask</param>
+/// <param name="fileNameMask">the file name filter mask</param>
+/// <param name="AccessFlag">set the file access control flag if the control filter is enabled</param>
 extern "C" __declspec(dllexport) 
 BOOL
 AddFileControlToProcessByName(	
@@ -1364,6 +1996,18 @@ AddFileControlToProcessByName(
 	WCHAR*		fileNameMask,
 	ULONG		AccessFlag );
 
+/// <summary>
+/// register the file callback IO for the process with the filter option.
+/// </summary>
+/// <param name="processNameMaskLength">the length of the process name filter mask</param>
+/// <param name="processNameMask">the process name filter mask</param>
+/// <param name="fileNameMaskLength">the length of the file name filter mask</param>
+/// <param name="fileNameMask">the file name filter mask</param>
+/// <param name="monitorIOs">register the monitor IO callback if the monitor filter driver is enabled</param>
+/// <param name="controlIOs">register the control IO callback if the control filter driver is enabled</param>
+/// <param name="filterByDesiredAccess">if it is not 0, callback when file opens with this DesiredAccess</param>
+/// <param name="filterByDisposition">if it is not 0, callback when file opens with this Disposition</param>
+/// <param name="filterByCreateOptions">if it is not 0, callback when file opens with this CreateOptions</param>
 extern "C" __declspec(dllexport) 
 BOOL
 AddFileCallbackIOToProcessByName(	
@@ -1385,6 +2029,14 @@ RemoveFileControlFromProcessByName(
 	ULONG		fileNameMaskLength,
 	WCHAR*		fileNameMask);
 
+/// <summary>
+/// This is the API to add the file access rights of the specific files to the specific processes by process Id
+/// This feature requires the control filter was enabled
+/// </summary>
+/// <param name="processId">the process Id it will be filtered</param>
+/// <param name="fileNameMaskLength">the length of the file name filter mask</param>
+/// <param name="fileNameMask">the file name filter mask</param>
+/// <param name="AccessFlag">the file access control flag</param>
 extern "C" __declspec(dllexport) 
 BOOL
 AddFileControlToProcessById(	
@@ -1439,5 +2091,12 @@ GetAESTagData(
 	LPCTSTR		fileName,
 	PULONG		tagDataSize,
 	BYTE*		tagData);
+
+extern "C" __declspec(dllexport) 
+BOOL
+GetAESIV(
+	LPCTSTR		fileName,
+	PULONG		ivSize,
+	BYTE*		ivBuffer);
 
 #endif//__SHARE_TYPE_H__

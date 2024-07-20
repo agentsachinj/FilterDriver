@@ -29,10 +29,262 @@ using System.Collections;
 using System.Configuration;
 using System.Windows.Forms;
 
+using EaseFilter.FilterControl;
 using EaseFilter.CommonObjects;
 
 namespace  SecureShare
 {
+
+     public enum AESFlags : uint
+    {
+        Flags_Enabled_Expire_Time = 0x00000010,
+        Flags_Enabled_Check_ProcessName = 0x00000020,
+        Flags_Enabled_Check_UserName = 0x00000040,
+        Flags_Enabled_Check_AccessFlags = 0x00000080,
+        Flags_Enabled_Check_User_Permit = 0x00000100,
+        Flags_AES_Key_Was_Embedded = 0x00000200,
+        Flags_Request_AccessFlags_From_User = 0x00000400,
+        Flags_Request_IV_And_Key_From_User = 0x00000800, 
+        Flags_Enabled_Check_Computer_Id = 0x00001000,
+        Flags_Enabled_Check_User_Password = 0x00002000, 
+
+    }
+
+    /// <summary>
+    /// this is the return data structure for encryption to filter driver.
+    /// when the filter command is FILTER_REQUEST_ENCRYPTION_IV_AND_KEY,
+    /// FILTER_REQUEST_ENCRYPTION_IV_AND_KEY_AND_ACCESSFLAG or FILTER_REQUEST_ENCRYPTION_IV_AND_KEY_AND_TAGDATA
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct AESDataBuffer
+    {
+        public uint AccessFlags;
+        public uint IVLength;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 16)]
+        public byte[] IV;
+        public uint EncryptionKeyLength;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 32)]
+        public byte[] EncryptionKey;
+        public uint TagDataLength;
+        public byte[] TagData;
+    } 
+
+    /// <summary>
+    /// This is the DR info meta data which will be stored in server if revoke access control is enabled.
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public class DRPolicy
+    {
+        /// <summary>
+        /// If it is not empty, only the processes in the process list can access the files.
+        /// </summary>
+        public string AuthorizedProcessNames;
+        /// <summary>
+        /// If it is not empty, all the processes in the process list can not access the files.
+        /// </summary>
+        public string UnauthorizedProcessNames;
+        /// <summary>
+        /// If it is not empty, only the users in the user name list can access the files.
+        /// </summary>
+        public string AuthorizedUserNames;
+        /// <summary>
+        /// If it is not empty, all the useres in the user name list can not access the files.
+        /// </summary>
+        public string UnauthorizedUserNames;
+        /// <summary>
+        /// If it is not empty, only the computer in the computer id list can access the files.
+        /// </summary>
+        public string AuthorizedComputerIds;
+        /// <summary>
+        /// the password of the shared file.
+        /// </summary>
+        public string UserPassword;
+        /// <summary>
+        /// the access flags of the shared file.
+        /// </summary>
+        public uint AccessFlags;
+        /// <summary>
+        /// The file will be expired after the expire time in UTC format, and it can't be accessed.           
+        /// </summary>
+        public long ExpireTime;
+        /// <summary>
+        /// The time in UTC format of the encrypted file was created.
+        /// </summary>
+        public long CreationTime;
+        /// <summary>
+        /// the file name which was applied with policy.
+        /// </summary>
+        public string FileName;
+        /// <summary>
+        /// The encryption key hex string.
+        /// </summary>
+        public string EncryptionKey;
+        /// <summary>
+        /// the iv hex string.
+        /// </summary>
+        public string EncryptionIV;
+    }    
+
+    
+    /// <summary>
+    /// This the DR data which will be embedded to the encyrpted file    
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct DRPolicyData
+    {
+
+        public uint AESVerificationKey;
+        public AESFlags AESFlags;
+        public uint IVLength;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 16)]
+        public byte[] IV;
+        public uint EncryptionKeyLength;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 32)]
+        public byte[] EncryptionKey;
+        public long CreationTime;
+        public long ExpireTime;
+        public uint AccessFlags;
+        public long FileSize;
+        public uint LengthOfAuthorizedProcessNames;
+        public uint LengthOfUnauthorizedProcessNames;
+        public uint LengthOfAuthorizedUserNames;
+        public uint LengthOfUnauthorizedUserNames;
+        public uint LengthOfAccountName;
+        public uint LengthOfComputerIds;
+        public uint LengthOfUserPassword;
+        public string AuthorizedProcessNames;
+        public string UnauthorizedProcessNames;
+        public string AuthorizedUserNames;
+        public string UnauthorizedUserNames;
+        public string AccountName;
+        public string ComputerIds;
+        public string UserPassword;
+        public uint SizeOfAESData;
+
+    }
+
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct UserInfo
+    {
+        /// <summary>
+        /// the owner account name
+        /// </summary>
+        public string AccountName;
+        /// <summary>
+        /// the password of the account
+        /// </summary>
+        public string AccountPassword;
+        /// <summary>
+        /// the process name which access the file.
+        /// </summary>
+        public string ProcessName;
+        /// <summary>
+        /// the user name who access the file.
+        /// </summary>
+        public string UserName;
+        /// <summary>
+        /// the computer information which access the file.
+        /// </summary>
+        public string ComputerId;
+        /// <summary>
+        /// the encrypted file which was accessed.
+        /// </summary>
+        public string FileName;
+        /// <summary>
+        /// the creation time of the file which was accessed.
+        /// </summary>
+        public long CreationTime;
+        /// <summary>
+        /// the password of the user input.
+        /// </summary>
+        public string UserPassword;
+        /// the encryption iv hex string;
+        /// </summary>
+        public string EncryptionIV;
+    }
+
+
+    public class DigitalRightControl
+    {
+        public const uint AES_VERIFICATION_KEY = 0xccb76e80;
+        public static string PassPhrase = "PassPhrase";
+
+        private static byte[] ConvertDRPolicyDataToByteArray(DRPolicyData policy)
+        {
+            MemoryStream ms = new MemoryStream();
+            BinaryWriter bw = new BinaryWriter(ms);
+            bw.Write(AES_VERIFICATION_KEY);
+            bw.Write((uint)(policy.AESFlags));
+            bw.Write(policy.IVLength);
+            bw.Write(policy.IV);
+            bw.Write(policy.EncryptionKeyLength);
+            bw.Write(policy.EncryptionKey);
+            bw.Write(policy.CreationTime);
+            bw.Write(policy.ExpireTime);
+            bw.Write((uint)policy.AccessFlags);
+            bw.Write(policy.FileSize);
+            bw.Write(policy.LengthOfAuthorizedProcessNames);
+            bw.Write(policy.LengthOfUnauthorizedProcessNames);
+            bw.Write(policy.LengthOfAuthorizedUserNames);
+            bw.Write(policy.LengthOfUnauthorizedUserNames);
+            bw.Write(policy.LengthOfAccountName);
+            bw.Write(policy.LengthOfComputerIds);
+            bw.Write(policy.LengthOfUserPassword);
+
+            byte[] strBuffer;
+            if (policy.LengthOfAuthorizedProcessNames > 0)
+            {
+                strBuffer = UnicodeEncoding.Unicode.GetBytes(policy.AuthorizedProcessNames);
+                bw.Write(strBuffer);
+            }
+
+            if (policy.LengthOfUnauthorizedProcessNames > 0)
+            {
+                strBuffer = UnicodeEncoding.Unicode.GetBytes(policy.UnauthorizedProcessNames);
+                bw.Write(strBuffer);
+            }
+
+            if (policy.LengthOfAuthorizedUserNames > 0)
+            {
+                strBuffer = UnicodeEncoding.Unicode.GetBytes(policy.AuthorizedUserNames);
+                bw.Write(strBuffer);
+            }
+
+            if (policy.LengthOfUnauthorizedUserNames > 0)
+            {
+                strBuffer = UnicodeEncoding.Unicode.GetBytes(policy.UnauthorizedUserNames);
+                bw.Write(strBuffer);
+            }
+
+            if (policy.LengthOfAccountName > 0)
+            {
+                strBuffer = UnicodeEncoding.Unicode.GetBytes(policy.AccountName);
+                bw.Write(strBuffer);
+            }
+
+            if (policy.LengthOfComputerIds > 0)
+            {
+                strBuffer = UnicodeEncoding.Unicode.GetBytes(policy.ComputerIds);
+                bw.Write(strBuffer);
+            }
+
+            if (policy.LengthOfUserPassword > 0)
+            {
+                strBuffer = UnicodeEncoding.Unicode.GetBytes(policy.UserPassword);
+                bw.Write(strBuffer);
+            }
+
+            //append the sizeof the DR policy
+            int sizeofDRDataArray = (int)ms.Length + 4;// the size of sizeofDRDataArray takes 4 bytes memory as a int data
+            bw.Write(sizeofDRDataArray);
+
+            byte[] AESBuffer = ms.ToArray();
+
+            return AESBuffer;
+        }
+    }
+
 
     public class CacheUserAccessInfo
     {
@@ -47,7 +299,7 @@ namespace  SecureShare
         public string lastError = string.Empty;
 
     }
-
+   
     public class DRServer
     {
 
@@ -63,32 +315,30 @@ namespace  SecureShare
             deleteCachedItemTimer.Elapsed += new System.Timers.ElapsedEventHandler(deleteCachedItemTimer_Elapsed);
         }
 
-        static public bool GetFileAccessPermission(ref FilterAPI.MessageSendData messageSend, ref FilterAPI.MessageReplyData messageReply)
+        static public bool GetFileAccessPermission(EncryptEventArgs encryptEventtArgs)
         {
             Boolean retVal = true;
-            string fileName = messageSend.FileName;
+            string fileName = encryptEventtArgs.FileName;
             string lastError = string.Empty;
-            string processName = string.Empty;
-            string userName = string.Empty;
+            string processName = encryptEventtArgs.ProcessName;
+            string userName = encryptEventtArgs.UserName;
             string encryptKey = string.Empty;
-
 
             try
             {
 
-                FilterAPI.DecodeProcessName(messageSend.ProcessId, out processName);
-                FilterAPI.DecodeUserName(messageSend.Sid, out userName);
+                if (null == encryptEventtArgs.EncryptionTag || encryptEventtArgs.EncryptionTag.Length == 0)
+                {
+                    encryptEventtArgs.Description = "There are no encryption tag data.";
+
+                    return false;
+                }
 
                 //by default the tag data format is "accountName;ivStr"
-
-                int tagDataLength = (int)messageSend.DataBufferLength;
-                byte[] tagData = messageSend.DataBuffer;
-                Array.Resize(ref tagData, tagDataLength);
-
-                string tagStr = UnicodeEncoding.Unicode.GetString(tagData);
+                string tagStr = UnicodeEncoding.Unicode.GetString(encryptEventtArgs.EncryptionTag);
 
                 int index = tagStr.IndexOf(";");
-                byte[] iv = tagData;
+                byte[] iv = encryptEventtArgs.EncryptionTag;
 
                 if (index > 0)
                 {
@@ -111,159 +361,33 @@ namespace  SecureShare
                 {
                     byte[] keyArray = Utils.ConvertHexStrToByteArray(encryptKey);
 
-                    //write the iv and key to the reply data buffer with format FilterAPI.AESDataBuffer
-                    AESDataBuffer aesData = new AESDataBuffer();
-                    if (messageSend.MessageType == (uint)FilterAPI.FilterCommand.FILTER_REQUEST_ENCRYPTION_IV_AND_KEY_AND_ACCESSFLAG)
-                    {
-                        aesData.AccessFlags = FilterAPI.ALLOW_MAX_RIGHT_ACCESS;
-                    }
-                    else
-                    {
-                        aesData.AccessFlags = FilterAPI.ALLOW_MAX_RIGHT_ACCESS;
-                    }
-                    aesData.IV = iv;
-                    aesData.IVLength = (uint)iv.Length;
-                    aesData.EncryptionKey = keyArray;
-                    aesData.EncryptionKeyLength = (uint)keyArray.Length;
+                    encryptEventtArgs.AccessFlags = FilterAPI.ALLOW_MAX_RIGHT_ACCESS;
+                    encryptEventtArgs.IV = iv;
+                    encryptEventtArgs.EncryptionKey = keyArray;
+                    encryptEventtArgs.ReturnStatus = NtStatus.Status.Success;
 
-                    byte[] aesDataArray = DigitalRightControl.ConvertAESDataToByteArray(aesData);
-                    messageReply.DataBufferLength = (uint)aesDataArray.Length;
-                    Array.Copy(aesDataArray, messageReply.DataBuffer, aesDataArray.Length);
-
-                    messageReply.ReturnStatus = (uint)FilterAPI.NTSTATUS.STATUS_SUCCESS;
+                }
+                else
+                {
+                    encryptEventtArgs.IoStatus = encryptEventtArgs.ReturnStatus = NtStatus.Status.AccessDenied;
+                    encryptEventtArgs.Description = lastError;
 
                 }
             }
             catch (Exception ex)
             {
                 lastError = "GetFileAccessPermission exception." + ex.Message;
+                encryptEventtArgs.Description = lastError;
+
                 EventManager.WriteMessage(340, "GetFileAccessPermission", EventLevel.Error, lastError);
                 retVal = false;
             }
 
-            if (!retVal)
-            {
-                byte[] errorBuffer = UnicodeEncoding.Unicode.GetBytes(lastError);
-                Array.Copy(errorBuffer, messageSend.DataBuffer, errorBuffer.Length);
-
-                messageSend.DataBufferLength = (uint)errorBuffer.Length;
-            }
-
-
             return retVal;
 
         }
       
-     
-        static private bool GetAccessPermissionFromServer(  string fileName,
-                                                            string userName,
-                                                            string processName,
-                                                            string tagStr,
-                                                            ref string encryptKey,
-                                                            ref uint accessFlag,
-                                                            ref string lastError)                                                           
-        {
-            Boolean retVal = true;
-
-            try
-            {
-                 CacheUserAccessInfo cacheUserAccessInfo = new CacheUserAccessInfo();
-
-                 string index = userName + "_" + processName + "_" + tagStr;
-
-                //cache the same user/process/filename access.
-                lock (userAccessCache)
-                {
-                    if (userAccessCache.ContainsKey(index))
-                    {
-                        cacheUserAccessInfo = userAccessCache[index];
-                        EventManager.WriteMessage(446, "GetUserPermission", EventLevel.Verbose, "Thread" + Thread.CurrentThread.ManagedThreadId + ",userInfoKey " + index + " exists in the cache table.");
-                    }
-                    else
-                    {
-                        cacheUserAccessInfo.isDownloaded = false;
-                        cacheUserAccessInfo.index = index;
-                        cacheUserAccessInfo.lastAccessTime = DateTime.Now;
-                        userAccessCache.Add(index, cacheUserAccessInfo);
-                        EventManager.WriteMessage(435, "GetUserPermission", EventLevel.Verbose, "Thread" + Thread.CurrentThread.ManagedThreadId + ",add userInfoKey " + index + " to the cache table.");
-                    }
-                }
-
-                //synchronize the same file access.
-                if (!cacheUserAccessInfo.isDownloaded && !cacheUserAccessInfo.syncEvent.WaitOne(new TimeSpan(0, 0, cacheTimeOutInSeconds)) )
-                {
-                    string info = "User name: " + userName + ",processname:" + processName + ",file name:" + fileName + " wait for permission timeout.";
-                    EventManager.WriteMessage(402, "GetUserPermission", EventLevel.Warning, info);
-                    return false;
-                }
-
-                TimeSpan timeSpan = DateTime.Now - cacheUserAccessInfo.lastAccessTime;
-
-                if (cacheUserAccessInfo.isDownloaded && timeSpan.TotalSeconds < cacheTimeOutInSeconds)
-                {
-                    //the access was cached, return the last access status.
-                    retVal = cacheUserAccessInfo.accessStatus;
-
-                    if (!retVal)
-                    {
-                        EventManager.WriteMessage(308, "GetAccessPermissionFromServer", EventLevel.Error, cacheUserAccessInfo.lastError);
-                    }
-                    else
-                    {
-                        string info = "thread" + Thread.CurrentThread.ManagedThreadId + ",  Cached userInfoKey " + index + " in the cache table,return " + retVal;
-                        EventManager.WriteMessage(451, "GetUserPermission", EventLevel.Verbose, info);
-                    }
-
-                    encryptKey = cacheUserAccessInfo.key;
-                    accessFlag = cacheUserAccessInfo.accessFlags;
-                    lastError = cacheUserAccessInfo.lastError;
-
-                    cacheUserAccessInfo.syncEvent.Set();
-
-                    return retVal;
-                }
-
-                string encryptionIV = tagStr;
-
-                retVal = WebAPIServices.GetSharedFilePermission(fileName, processName, userName, tagStr, ref encryptionIV, ref encryptKey, ref accessFlag, ref lastError);
-                cacheUserAccessInfo.accessStatus = retVal;
-                cacheUserAccessInfo.isDownloaded = true;
-                cacheUserAccessInfo.syncEvent.Set();
-
-                if (!retVal)
-                {
-                    string message = "Get file " + fileName + " permission from server return error:" + lastError;
-                    cacheUserAccessInfo.lastError = message;
-                    cacheUserAccessInfo.accessStatus = false;
-
-                    EventManager.WriteMessage(293, "GetAccessPermissionFromServer", EventLevel.Error, message);
-
-                    return retVal;
-                }
-                else
-                {
-                    string message = "Get file " +fileName + " permission frome server return succeed.";
-                    EventManager.WriteMessage(208, "GetAccessPermissionFromServer", EventLevel.Verbose, message);
-                }
-
-                cacheUserAccessInfo.key = encryptKey;
-                cacheUserAccessInfo.iv = encryptionIV;
-                cacheUserAccessInfo.accessFlags = accessFlag;
-              
-
-            }
-            catch (Exception ex)
-            {
-                EventManager.WriteMessage(286, "GetAccessPermissionFromServer", EventLevel.Error, "Get file " + fileName + "permission failed with exception:" + ex.Message);
-                retVal = false;
-            }
-
-            return retVal;
-
-        }
-
       
-
         static private bool IsFileAccessAuthorized(string fileName,
                                           string userName,
                                           string processName,
@@ -285,10 +409,6 @@ namespace  SecureShare
 
             try
             {
-                if (GlobalConfig.StoreSharedFileMetaDataInServer)
-                {
-                    return GetAccessPermissionFromServer(fileName, userName, processName, tagStr, ref encryptKey, ref accessFlag, ref lastError);
-                }
 
                 string drFilePath = GlobalConfig.DRInfoFolder + "\\" + tagStr + ".xml";
                 Dictionary<string, string> keyValues = new Dictionary<string, string>();

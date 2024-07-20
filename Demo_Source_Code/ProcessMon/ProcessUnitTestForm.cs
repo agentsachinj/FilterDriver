@@ -28,46 +28,41 @@ using System.Windows.Forms;
 using Microsoft.Win32.SafeHandles;
 using System.Security.AccessControl;
 using System.Security.Principal;
+using System.Threading;
+using System.Threading.Tasks;
 
+using EaseFilter.FilterControl;
 using EaseFilter.CommonObjects;
 
 namespace ProcessMon
 {
     public partial class ProcessUnitTestForm : Form
     {
-
+       
         bool isUnitTestCompleted = false;
+        //Purchase a license key with the link: http://www.easefilter.com/Order.htm
+        //Email us to request a trial key: info@easefilter.com //free email is not accepted.
+        string licenseKey = "11542-941E5-86503-C186E-C8EC0-63A09-0BB1F-142"; // This is a registration key for the trial license key - 11542-941E5-86503-C186E-CBEC0-66A50
 
-        public ProcessUnitTestForm()
+        public ProcessUnitTestForm(string _licenseKey)
         {
             InitializeComponent();
+            this.licenseKey = _licenseKey;
 
-        }
-
-
-        public void StartFilterUnitTest()
-        {
-            try
-            {
-                FilterAPI.ResetConfigData();
-                ProcessUnitTest.ProcessFilterUnitTest(richTextBox_TestResult);
-                GlobalConfig.Load();
-
-              
-            }
-            catch (Exception ex)
-            {
-                richTextBox_TestResult.Text = "Filter test exception:" + ex.Message;
-            }
         }
 
         private void ProcessUnitTest_Activated(object sender, EventArgs e)
         {
             if (!isUnitTestCompleted)
             {
-                StartFilterUnitTest();
                 isUnitTestCompleted = true;
+
+                ProcessUnitTest.ProcessFilterUnitTest(richTextBox_TestResult,licenseKey);
+                GlobalConfig.Load();
+                //System.Threading.Tasks.Task.Factory.StartNew(() => { ProcessUnitTest.ProcessFilterUnitTest(richTextBox_TestResult); });
+
             }
+          
         }
 
     }

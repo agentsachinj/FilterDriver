@@ -28,6 +28,7 @@ using System.IO;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
+using EaseFilter.FilterControl;
 using EaseFilter.CommonObjects;
 
 namespace  SecureShare
@@ -36,23 +37,22 @@ namespace  SecureShare
     {
         //Purchase a license key with the link: http://www.easefilter.com/Order.htm
         //Email us to request a trial key: info@easefilter.com //free email is not accepted.
-        string registerKey = GlobalConfig.registerKey;
+        string licenseKey = "******************************************";
 
-        FilterMessage filterMessage = null;
-        FilterWorker filterWorker = null;
+        EncryptEventHandler encryptEventHandler = null;
+        FilterControl filterControl = new FilterControl();
 
         public ConsoleForm()
         {
 
-            GlobalConfig.filterType = FilterAPI.FilterType.FILE_SYSTEM_MONITOR | FilterAPI.FilterType.FILE_SYSTEM_CONTROL | FilterAPI.FilterType.FILE_SYSTEM_ENCRYPTION
-                | FilterAPI.FilterType.FILE_SYSTEM_PROCESS | FilterAPI.FilterType.FILE_SYSTEM_REGISTRY;
+            GlobalConfig.filterType = FilterAPI.FilterType.MONITOR_FILTER | FilterAPI.FilterType.CONTROL_FILTER | FilterAPI.FilterType.ENCRYPTION_FILTER
+                | FilterAPI.FilterType.PROCESS_FILTER | FilterAPI.FilterType.REGISTRY_FILTER;
 
             InitializeComponent();
 
             StartPosition = FormStartPosition.CenterScreen;
 
-            filterMessage = new FilterMessage(listView_Info);
-            filterWorker = new FilterWorker(listView_Info);
+            encryptEventHandler = new EncryptEventHandler(listView_Info);
 
             DisplayVersion();
 
@@ -84,20 +84,153 @@ namespace  SecureShare
             GlobalConfig.Stop();
         }
 
+        void SendSettingsToFilter()
+        {
+            filterControl.ClearFilters();
+
+            string[] whiteList = null;
+            string[] blacklist = null;
+
+            FileFilterRule filterRuleShareFolder = new FileFilterRule();
+            filterRuleShareFolder.IncludeFileFilterMask = GlobalConfig.ShareFolder + "\\*";
+            filterRuleShareFolder.AccessFlag |= (uint)FilterAPI.AccessFlag.ENABLE_FILE_ENCRYPTION_RULE | FilterAPI.ALLOW_MAX_RIGHT_ACCESS;
+            filterRuleShareFolder.AccessFlag &= (uint)(~FilterAPI.AccessFlag.ALLOW_ENCRYPT_NEW_FILE);// this folder won't encrypt the new file.
+            filterRuleShareFolder.AccessFlag &= (uint)(~FilterAPI.AccessFlag.ALLOW_READ_ENCRYPTED_FILES);// all process can't read the encyrpted file except the authorized processes.
+            filterRuleShareFolder.EncryptMethod = (int)FilterAPI.EncryptionMethod.ENCRYPT_FILE_WITH_SAME_KEY_AND_UNIQUE_IV;
+            filterRuleShareFolder.EncryptionPassPhrase = GlobalConfig.MasterPassword;
+
+            //for whitelist process, it has maximum acess rights.
+            if (GlobalConfig.ProtectFolderWhiteList == "*")
+            {
+                //allow all processes to read the encrypted file except the black list processes.
+                filterRuleShareFolder.AccessFlag |= (uint)(FilterAPI.AccessFlag.ALLOW_READ_ENCRYPTED_FILES);
+            }
+            else
+            {
+                //for whitelist process, it has maximum acess rights.
+                whiteList = GlobalConfig.ShareFolderWhiteList.Split(new char[] { ';' });
+                if (whiteList.Length > 0)
+                {
+                    foreach (string authorizedUser in whiteList)
+                    {
+                        if (authorizedUser.Trim().Length > 0)
+                        {
+                            //not allow to encrypt the new file
+                            uint accessFlag = filterRuleShareFolder.AccessFlag | (uint)(FilterAPI.AccessFlag.ALLOW_READ_ENCRYPTED_FILES);
+                            filterRuleShareFolder.ProcessNameRights += ";" + authorizedUser + "!" + accessFlag.ToString();
+                        }
+                    }
+                }
+
+            }
+
+            //for blacklist process, it has maximum acess rights.
+            blacklist = GlobalConfig.ShareFolderBlackList.Split(new char[] { ';' });
+            if (blacklist.Length > 0)
+            {
+                foreach (string unAuthorizedUser in blacklist)
+                {
+                    if (unAuthorizedUser.Trim().Length > 0)
+                    {
+                        //can't read the encrypted files, not allow to encrypt the new file
+                        uint accessFlag = filterRuleShareFolder.AccessFlag;
+                        filterRuleShareFolder.ProcessNameRights += ";" + unAuthorizedUser + "!" + accessFlag.ToString();
+                    }
+                }
+            }
+
+            FileFilter shareFolderFileFilter = filterRuleShareFolder.ToFileFilter();
+            shareFolderFileFilter.OnFilterRequestEncryptKey += encryptEventHandler.OnFilterRequestEncryptKey;
+            filterControl.AddFilter(shareFolderFileFilter);
+
+            FileFilterRule filterRuleProtectFolder = new FileFilterRule();
+            filterRuleProtectFolder.IncludeFileFilterMask = GlobalConfig.ProtectFolder + "\\*";
+            filterRuleProtectFolder.AccessFlag |= (uint)FilterAPI.AccessFlag.ENABLE_FILE_ENCRYPTION_RULE | FilterAPI.ALLOW_MAX_RIGHT_ACCESS;
+            filterRuleProtectFolder.AccessFlag &= (uint)(~FilterAPI.AccessFlag.ALLOW_READ_ENCRYPTED_FILES);// all process can't read the encyrpted file except the authorized processes.
+            filterRuleProtectFolder.EncryptMethod = (int)FilterAPI.EncryptionMethod.ENCRYPT_FILE_WITH_SAME_KEY_AND_UNIQUE_IV;
+            filterRuleProtectFolder.EncryptionPassPhrase = GlobalConfig.MasterPassword;
+
+            //for whitelist process, it has maximum acess rights.
+            if (GlobalConfig.ProtectFolderWhiteList == "*")
+            {
+                //allow all processes to read the encrypted file except the black list processes.
+                filterRuleProtectFolder.AccessFlag |= (uint)(FilterAPI.AccessFlag.ALLOW_READ_ENCRYPTED_FILES);
+            }
+            else
+            {
+                //for whitelist process, it has maximum acess rights.
+                whiteList = GlobalConfig.ProtectFolderWhiteList.Split(new char[] { ';' });
+                if (whiteList.Length > 0)
+                {
+                    foreach (string authorizedUser in whiteList)
+                    {
+                        if (authorizedUser.Trim().Length > 0)
+                        {
+                            filterRuleProtectFolder.ProcessNameRights += ";" + authorizedUser + "!" + FilterAPI.ALLOW_MAX_RIGHT_ACCESS.ToString();
+                        }
+                    }
+                }
+            }
+
+            //for blacklist process, it has maximum acess rights.
+            blacklist = GlobalConfig.ProtectFolderBlackList.Split(new char[] { ';' });
+            if (blacklist.Length > 0)
+            {
+                foreach (string unAuthorizedUser in blacklist)
+                {
+                    if (unAuthorizedUser.Trim().Length > 0)
+                    {
+                        //can't read the encrypted files
+                        uint accessFlag = FilterAPI.ALLOW_MAX_RIGHT_ACCESS & (uint)(~FilterAPI.AccessFlag.ALLOW_READ_ENCRYPTED_FILES);
+                        filterRuleProtectFolder.ProcessNameRights += ";" + unAuthorizedUser + "!" + accessFlag.ToString();
+                    }
+                }
+            }
+
+            FileFilter protectFolderFileFilter = filterRuleProtectFolder.ToFileFilter();
+            protectFolderFileFilter.OnFilterRequestEncryptKey += encryptEventHandler.OnFilterRequestEncryptKey;
+            filterControl.AddFilter(protectFolderFileFilter);
+
+            string lastError = string.Empty;
+            if (!filterControl.SendConfigSettingsToFilter(ref lastError))
+            {
+                MessageBox.Show(lastError, "StartFilter", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+
+        }
+
+
         private void toolStripButton_StartFilter_Click(object sender, EventArgs e)
         {
-            string lastError = string.Empty;
-            if (filterWorker.StartService(ref lastError))
+            try
             {
+                string lastError = string.Empty;
+
+                bool ret = filterControl.StartFilter(GlobalConfig.filterType, GlobalConfig.FilterConnectionThreads, GlobalConfig.ConnectionTimeOut, licenseKey, ref lastError);
+                if (!ret)
+                {
+                    MessageBoxHelper.PrepToCenterMessageBoxOnForm(this);
+                    MessageBox.Show("Start filter failed." + lastError);
+                    return;
+                }
+
+                SendSettingsToFilter();
+
                 toolStripButton_StartFilter.Enabled = false;
                 toolStripButton_Stop.Enabled = true;
+
+                EventManager.WriteMessage(102, "StartFilter", EventLevel.Information, "Start filter service succeeded.");
+            }
+            catch (Exception ex)
+            {
+                EventManager.WriteMessage(104, "StartFilter", EventLevel.Error, "Start filter service failed with error " + ex.Message);
             }
 
         }
 
         private void toolStripButton_Stop_Click(object sender, EventArgs e)
         {
-            FilterAPI.StopFilter();
+            filterControl.StopFilter();
 
             toolStripButton_StartFilter.Enabled = true;
             toolStripButton_Stop.Enabled = false;
@@ -105,45 +238,10 @@ namespace  SecureShare
 
         private void toolStripButton_ClearMessage_Click(object sender, EventArgs e)
         {
-            filterMessage.InitListView();
+            encryptEventHandler.InitListView();
         }
 
-        Boolean FilterCallback(IntPtr sendDataPtr, IntPtr replyDataPtr)
-        {
-            Boolean ret = true;
-
-            try
-            {
-                FilterAPI.MessageSendData messageSend = (FilterAPI.MessageSendData)Marshal.PtrToStructure(sendDataPtr, typeof(FilterAPI.MessageSendData));
-
-                if (FilterAPI.MESSAGE_SEND_VERIFICATION_NUMBER != messageSend.VerificationNumber)
-                {
-                    MessageBoxHelper.PrepToCenterMessageBoxOnForm(this);
-                    MessageBox.Show("Received message corrupted.Please check if the MessageSendData structure is correct.");
-
-                    EventManager.WriteMessage(139, "FilterCallback", EventLevel.Error, "Received message corrupted.Please check if the MessageSendData structure is correct.");
-
-                    return false;
-                }
-
-                filterMessage.AddMessage(messageSend);
-
-
-                return ret;
-            }
-            catch (Exception ex)
-            {
-                EventManager.WriteMessage(134, "FilterCallback", EventLevel.Error, "filter callback exception." + ex.Message);
-                return false;
-            }
-
-        }
-
-        void DisconnectCallback()
-        {
-           EventManager.WriteMessage(165,"DisconnectCallback", EventLevel.Information,"Filter Disconnected." + FilterAPI.GetLastErrorMessage());
-        }
-
+       
         private void settingsToolStripMenuItem_Click(object sender, EventArgs e)
         {
             ShareFileSettingForm settingForm = new ShareFileSettingForm();
@@ -154,29 +252,22 @@ namespace  SecureShare
 
         private void ConsoleForm_FormClosed(object sender, FormClosedEventArgs e)
         {
-
+            FilterAPI.ResetConfigData();
             GlobalConfig.Stop();
+            filterControl.StopFilter();
             Application.Exit();
         }
 
         private void unInstallFilterDriverToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            FilterAPI.StopFilter();
+            filterControl.StopFilter();
             FilterAPI.UnInstallDriver();
         }
 
         private void shareManagerToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            if (GlobalConfig.StoreSharedFileMetaDataInServer)
-            {
-                ShareFileManagerInServer shareManager = new ShareFileManagerInServer();
-                shareManager.ShowDialog();
-            }
-            else
-            {
-                ShareFileManagerInLocal shareManager = new ShareFileManagerInLocal();
-                shareManager.ShowDialog();
-            }
+            ShareFileManagerInLocal shareManager = new ShareFileManagerInLocal();
+            shareManager.ShowDialog();
         }
 
         private void toolStripButton_Help_Click(object sender, EventArgs e)
@@ -196,6 +287,9 @@ namespace  SecureShare
 
         private void exitToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            FilterAPI.ResetConfigData();
+            GlobalConfig.Stop();
+            filterControl.StopFilter();
             Close();
         }
 

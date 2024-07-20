@@ -1,4 +1,16 @@
 #pragma once
 
+#include <string>
+#include <vector>
+#include "FilterControl.h"
+#include "WinDataStructures.h"
+#include "FilterAPI.h"
+
 VOID
-DisplayFilterMessageInfo( IN	PMESSAGE_SEND_DATA pSendMessage );
+DisplayFileIOMessage(FileIOEventArgs* fileIOEventArgs);
+
+VOID
+DisplayProcessMessage(ProcessEventArgs* processEventArgs);
+
+VOID
+DisplayRegistryMessage(RegistryEventArgs* registryEventArgs);

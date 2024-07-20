@@ -29,29 +29,44 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 using EaseFilter.CommonObjects;
+using EaseFilter.FilterControl;
 
 namespace FileProtector
 {
     public partial class ProtectorForm : Form
     {
-        //Purchase a license key with the link: http://www.easefilter.com/Order.htm
-        //Email us to request a trial key: info@easefilter.com //free email is not accepted.
-        string registerKey = GlobalConfig.registerKey;
+        MessageHandler messageHandler = null;
+        MonitorEventHandler monitorEventHandler = null;
+        ControlEventHandler controlEventHandler = null;
+        ProcessEventHandler processEventHandler = null;
+        EncryptEventHandler encryptEventHandler = new EncryptEventHandler();
 
-        FilterMessage filterMessage = null;
+        FilterControl filterControl = new FilterControl();
 
         public ProtectorForm()
         {
-            GlobalConfig.filterType = FilterAPI.FilterType.FILE_SYSTEM_MONITOR | FilterAPI.FilterType.FILE_SYSTEM_CONTROL | FilterAPI.FilterType.FILE_SYSTEM_ENCRYPTION
-                |FilterAPI.FilterType.FILE_SYSTEM_PROCESS|FilterAPI.FilterType.FILE_SYSTEM_REGISTRY;
+            GlobalConfig.filterType = FilterAPI.FilterType.MONITOR_FILTER | FilterAPI.FilterType.CONTROL_FILTER | FilterAPI.FilterType.ENCRYPTION_FILTER
+               | FilterAPI.FilterType.PROCESS_FILTER | FilterAPI.FilterType.REGISTRY_FILTER;
 
             InitializeComponent();
 
+            messageHandler = new MessageHandler(listView_Info);
+            monitorEventHandler = new MonitorEventHandler(messageHandler);
+            controlEventHandler = new ControlEventHandler(messageHandler);
+            processEventHandler = new ProcessEventHandler(messageHandler);
+
             StartPosition = FormStartPosition.CenterScreen;
-            filterMessage = new FilterMessage(listView_Info);
 
-            DisplayVersion();
+            this.Text += GlobalConfig.GetVersionInfo();
 
+            this.Load += new EventHandler(Form1_Load);
+
+        }
+
+        void Form1_Load(object sender, EventArgs e)
+        {
+            //to improve the listview performance
+            SendMessage(listView_Info.Handle, LVM_SETTEXTBKCOLOR, IntPtr.Zero, unchecked((IntPtr)(int)0xFFFFFF));
         }
 
         ~ProtectorForm()
@@ -59,20 +74,143 @@ namespace FileProtector
             GlobalConfig.Stop();
         }
 
-        private void DisplayVersion()
+        void SendSettingsToFilter()
         {
-            string version = Assembly.GetExecutingAssembly().GetName().Version.ToString();
-            try
+            filterControl.ClearFilters();
+
+            GlobalConfig.Load();
+
+            if (GlobalConfig.FilterRules.Count == 0)
             {
-                string filterDllPath = Path.Combine(GlobalConfig.AssemblyPath, "FilterAPI.Dll");
-                version = FileVersionInfo.GetVersionInfo(filterDllPath).ProductVersion;
-            }
-            catch (Exception ex)
-            {
-                EventManager.WriteMessage(43, "LoadFilterAPI Dll", EventLevel.Error, "FilterAPI.dll can't be found." + ex.Message);
+                MessageBoxHelper.PrepToCenterMessageBoxOnForm(this);
+                MessageBox.Show("You don't have any filter folder setup, please go to the settings to add a new filter rule, or the filter driver won't intercept any IOs.");
             }
 
-            this.Text += "    Version:  " + version;
+            foreach (FileFilterRule filterRule in GlobalConfig.FilterRules.Values)
+            {
+                FileFilter fileFilter = filterRule.ToFileFilter();
+
+                //add the monitor event handler for the file filter.
+                fileFilter.OnFileOpen += monitorEventHandler.OnFileOpen;
+                fileFilter.OnNewFileCreate += monitorEventHandler.OnNewFileCreate;
+                fileFilter.OnDeleteFile += monitorEventHandler.OnDeleteFile;
+                fileFilter.OnFileRead += monitorEventHandler.OnFileRead;
+                fileFilter.OnFileWrite += monitorEventHandler.OnFileWrite;
+                fileFilter.OnQueryFileBasicInfo += monitorEventHandler.OnQueryFileBasicInfo;
+                fileFilter.OnQueryFileId += monitorEventHandler.OnQueryFileId;
+                fileFilter.OnQueryFileNetworkInfo += monitorEventHandler.OnQueryFileNetworkInfo;
+                fileFilter.OnQueryFileSize += monitorEventHandler.OnQueryFileSize;
+                fileFilter.OnQueryFileStandardInfo += monitorEventHandler.OnQueryFileStandardInfo;
+                fileFilter.OnQueryFileInfo += monitorEventHandler.OnQueryFileInfo;
+                fileFilter.OnSetFileBasicInfo += monitorEventHandler.OnSetFileBasicInfo;
+                fileFilter.OnSetFileNetworkInfo += monitorEventHandler.OnSetFileNetworkInfo;
+                fileFilter.OnSetFileSize += monitorEventHandler.OnSetFileSize;
+                fileFilter.OnSetFileStandardInfo += monitorEventHandler.OnSetFileStandardInfo;
+                fileFilter.OnMoveOrRenameFile += monitorEventHandler.OnMoveOrRenameFile;
+                fileFilter.OnSetFileInfo += monitorEventHandler.OnSetFileInfo;
+                fileFilter.OnQueryFileSecurity += monitorEventHandler.OnQueryFileSecurity;
+                fileFilter.OnQueryDirectoryFile += monitorEventHandler.OnQueryDirectoryFile;
+                fileFilter.OnFileHandleClose += monitorEventHandler.OnFileHandleClose;
+                fileFilter.OnFileClose += monitorEventHandler.OnFileClose;
+
+                fileFilter.NotifyFileWasChanged += monitorEventHandler.NotifyFileWasChanged;
+
+                //add the control pre-event handler for the control file filter.
+                fileFilter.OnPreCreateFile += controlEventHandler.OnPreCreateFile;
+                fileFilter.OnPreDeleteFile += controlEventHandler.OnPreDeleteFile;
+                fileFilter.OnPreFileRead += controlEventHandler.OnPreFileRead;
+                fileFilter.OnPreFileWrite += controlEventHandler.OnPreFileWrite;
+                fileFilter.OnPreQueryFileBasicInfo += controlEventHandler.OnPreQueryFileBasicInfo;
+                fileFilter.OnPreQueryFileId += controlEventHandler.OnPreQueryFileId;
+                fileFilter.OnPreQueryFileNetworkInfo += controlEventHandler.OnPreQueryFileNetworkInfo;
+                fileFilter.OnPreQueryFileSize += controlEventHandler.OnPreQueryFileSize;
+                fileFilter.OnPreQueryFileStandardInfo += controlEventHandler.OnPreQueryFileStandardInfo;
+                fileFilter.OnPreQueryFileInfo += controlEventHandler.OnPreQueryFileInfo;
+                fileFilter.OnPreSetFileBasicInfo += controlEventHandler.OnPreSetFileBasicInfo;
+                fileFilter.OnPreSetFileNetworkInfo += controlEventHandler.OnPreSetFileNetworkInfo;
+                fileFilter.OnPreSetFileSize += controlEventHandler.OnPreSetFileSize;
+                fileFilter.OnPreSetFileStandardInfo += controlEventHandler.OnPreSetFileStandardInfo;
+                fileFilter.OnPreMoveOrRenameFile += controlEventHandler.OnPreMoveOrRenameFile;
+                fileFilter.OnPreSetFileInfo += controlEventHandler.OnPreSetFileInfo;
+                fileFilter.OnPreQueryFileSecurity += controlEventHandler.OnPreQueryFileSecurity;
+                fileFilter.OnPreQueryDirectoryFile += controlEventHandler.OnPreQueryDirectoryFile;
+                fileFilter.OnPreFileHandleClose += controlEventHandler.OnPreFileHandleClose;
+                fileFilter.OnPreFileClose += controlEventHandler.OnPreFileClose;
+                //add the control post-event handler for the control file filter.
+                fileFilter.OnPostCreateFile += controlEventHandler.OnPostCreateFile;
+                fileFilter.OnPostDeleteFile += controlEventHandler.OnPostDeleteFile;
+                fileFilter.OnPostFileRead += controlEventHandler.OnPostFileRead;
+                fileFilter.OnPostFileWrite += controlEventHandler.OnPostFileWrite;
+                fileFilter.OnPostQueryFileBasicInfo += controlEventHandler.OnPostQueryFileBasicInfo;
+                fileFilter.OnPostQueryFileId += controlEventHandler.OnPostQueryFileId;
+                fileFilter.OnPostQueryFileNetworkInfo += controlEventHandler.OnPostQueryFileNetworkInfo;
+                fileFilter.OnPostQueryFileSize += controlEventHandler.OnPostQueryFileSize;
+                fileFilter.OnPostQueryFileStandardInfo += controlEventHandler.OnPostQueryFileStandardInfo;
+                fileFilter.OnPostQueryFileInfo += controlEventHandler.OnPostQueryFileInfo;
+                fileFilter.OnPostSetFileBasicInfo += controlEventHandler.OnPostSetFileBasicInfo;
+                fileFilter.OnPostSetFileNetworkInfo += controlEventHandler.OnPostSetFileNetworkInfo;
+                fileFilter.OnPostSetFileSize += controlEventHandler.OnPostSetFileSize;
+                fileFilter.OnPostSetFileStandardInfo += controlEventHandler.OnPostSetFileStandardInfo;
+                fileFilter.OnPostMoveOrRenameFile += controlEventHandler.OnPostMoveOrRenameFile;
+                fileFilter.OnPostSetFileInfo += controlEventHandler.OnPostSetFileInfo;
+                fileFilter.OnPostQueryFileSecurity += controlEventHandler.OnPostQueryFileSecurity;
+                fileFilter.OnPostQueryDirectoryFile += controlEventHandler.OnPostQueryDirectoryFile;
+                fileFilter.OnPostFileHandleClose += controlEventHandler.OnPostFileHandleClose;
+                fileFilter.OnPostFileClose += controlEventHandler.OnPostFileClose;
+
+                //add encrypt event handler if needed.
+                fileFilter.OnFilterRequestEncryptKey += encryptEventHandler.OnFilterRequestEncryptKey;
+
+                filterControl.AddFilter(fileFilter);
+            }
+
+            foreach (ProcessFilterRule filterRule in GlobalConfig.ProcessFilterRules.Values)
+            {
+                ProcessFilter processFilter = filterRule.ToProcessFilter();
+
+                processFilter.OnProcessCreation += processEventHandler.OnProcessCreation;
+                processFilter.OnProcessPreTermination += processEventHandler.OnProcessPreTermination;
+                processFilter.NotifyProcessWasBlocked += processEventHandler.NotifyProcessWasBlocked;
+                processFilter.NotifyProcessTerminated += processEventHandler.NotifyProcessTerminated;
+                processFilter.NotifyThreadCreation += processEventHandler.NotifyThreadCreation;
+                processFilter.NotifyThreadTerminated += processEventHandler.NotifyThreadTerminated;
+                processFilter.NotifyProcessHandleInfo += processEventHandler.NotifyProcessHandleInfo;
+                processFilter.NotifyThreadHandleInfo += processEventHandler.NotifyThreadHandleInfo;
+
+                filterControl.AddFilter(processFilter);
+            }
+
+
+            filterControl.ProtectedProcessIdList = GlobalConfig.ProtectPidList;
+            filterControl.IncludeProcessIdList = GlobalConfig.IncludePidList;
+            filterControl.ExcludeProcessIdList = GlobalConfig.ExcludePidList;
+            filterControl.BooleanConfig = GlobalConfig.BooleanConfig;
+
+            filterControl.NotifiyFileIOWasBlocked -= controlEventHandler.NotifiyFileIOWasBlocked;
+            filterControl.NotifiyFileIOWasBlocked += controlEventHandler.NotifiyFileIOWasBlocked;
+
+            filterControl.NotifiyProcessTerminatedWasBlocked -= controlEventHandler.NotifiyProcessTerminatedWasBlocked;
+            filterControl.NotifiyProcessTerminatedWasBlocked += controlEventHandler.NotifiyProcessTerminatedWasBlocked;
+
+            filterControl.NotifyUSBReadWasBlocked -= controlEventHandler.NotifyUSBReadWasBlocked;
+            filterControl.NotifyUSBReadWasBlocked += controlEventHandler.NotifyUSBReadWasBlocked;
+
+            filterControl.NotifyUSBWriteWasBlocked -= controlEventHandler.NotifyUSBWriteWasBlocked;
+            filterControl.NotifyUSBWriteWasBlocked += controlEventHandler.NotifyUSBWriteWasBlocked;
+
+            filterControl.VolumeControlFlag = (FilterAPI.VolumeControlFlag)GlobalConfig.VolumeControlFlag;
+            filterControl.NotifyFilterAttachToVolume -= controlEventHandler.NotifyFilterAttachToVolume;
+            filterControl.NotifyFilterAttachToVolume += controlEventHandler.NotifyFilterAttachToVolume;
+            filterControl.NotifyFilterDetachFromVolume -= controlEventHandler.NotifyFilterDetachFromVolume;
+            filterControl.NotifyFilterDetachFromVolume += controlEventHandler.NotifyFilterDetachFromVolume;
+
+            string lastError = string.Empty;
+            if (!filterControl.SendConfigSettingsToFilter(ref lastError))
+            {
+                MessageBox.Show(lastError, "StartFilter", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+
+
         }
 
 
@@ -80,40 +218,24 @@ namespace FileProtector
         {
             try
             {
+                //Purchase a license key with the link: http://www.easefilter.com/Order.htm
+                //Email us to request a trial key: info@easefilter.com //free email is not accepted.        
+                string licenseKey = GlobalConfig.LicenseKey;
+
                 string lastError = string.Empty;
 
-                bool ret = FilterAPI.StartFilter( (int)GlobalConfig.FilterConnectionThreads
-                                            , registerKey
-                                            , new FilterAPI.FilterDelegate(FilterCallback)
-                                            , new FilterAPI.DisconnectDelegate(DisconnectCallback)
-                                            , ref lastError);
+                bool ret = filterControl.StartFilter(GlobalConfig.filterType, GlobalConfig.FilterConnectionThreads, GlobalConfig.ConnectionTimeOut, licenseKey, ref lastError);
                 if (!ret)
                 {
                     MessageBoxHelper.PrepToCenterMessageBoxOnForm(this);
-                    MessageBox.Show("Start filter failed." + lastError);
+                    MessageBox.Show("Start filter failed." + lastError, "StartFilter", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
 
+                SendSettingsToFilter();
+
                 toolStripButton_StartFilter.Enabled = false;
                 toolStripButton_Stop.Enabled = true;
-
-
-                if (GlobalConfig.FilterRules.Count == 0 && null != sender )
-                {
-                    FilterRule filterRule = new FilterRule();
-                    filterRule.Id = GlobalConfig.GetFilterRuleId();
-                    filterRule.IncludeFileFilterMask = "c:\\test\\*";
-                    filterRule.EventType = (uint)(FilterAPI.EVENTTYPE.WRITTEN | FilterAPI.EVENTTYPE.CREATED | FilterAPI.EVENTTYPE.DELETED | FilterAPI.EVENTTYPE.RENAMED); 
-                    filterRule.AccessFlag = (uint)FilterAPI.ALLOW_MAX_RIGHT_ACCESS;
-                    GlobalConfig.FilterRules.Add(filterRule.IncludeFileFilterMask, filterRule);
-
-                    MessageBoxHelper.PrepToCenterMessageBoxOnForm(this);
-                    MessageBox.Show("You don't have any monitor folder setup, add c:\\test\\* as your default test folder, I/Os from c:\\test\\* will show up in the console.");
-                }
-
-               
-
-                GlobalConfig.SendConfigSettingsToFilter();
 
                 EventManager.WriteMessage(102, "StartFilter", EventLevel.Information, "Start filter service succeeded.");
             }
@@ -127,8 +249,7 @@ namespace FileProtector
 
         private void toolStripButton_Stop_Click(object sender, EventArgs e)
         {
-
-            FilterAPI.StopFilter();
+            filterControl.StopFilter();
 
             toolStripButton_StartFilter.Enabled = true;
             toolStripButton_Stop.Enabled = false;
@@ -136,154 +257,45 @@ namespace FileProtector
 
         private void toolStripButton_ClearMessage_Click(object sender, EventArgs e)
         {
-            filterMessage.InitListView();
+            messageHandler.InitListView();
         }
-
-        static public void ToDebugger(string msg)
-        {
-            //System.Diagnostics.StackTrace st = new System.Diagnostics.StackTrace(false);
-            //string caller = st.GetFrame(1).GetMethod().Name;
-            System.Diagnostics.Debug.WriteLine(" Time:" + DateTime.Now.ToLongTimeString() + ": " + msg);
-        }
-
-        Boolean FilterCallback(IntPtr sendDataPtr, IntPtr replyDataPtr)
-        {
-            Boolean ret = true;
-
-            try
-            {
-                FilterAPI.MessageSendData messageSend = (FilterAPI.MessageSendData)Marshal.PtrToStructure(sendDataPtr, typeof(FilterAPI.MessageSendData));
-
-                if (FilterAPI.MESSAGE_SEND_VERIFICATION_NUMBER != messageSend.VerificationNumber)
-                {
-                    MessageBoxHelper.PrepToCenterMessageBoxOnForm(this);
-                    MessageBox.Show("Received message corrupted.Please check if the MessageSendData structure is correct.");
-
-                    EventManager.WriteMessage(139, "FilterCallback", EventLevel.Error, "Received message corrupted.Please check if the MessageSendData structure is correct.");
-                    return false;
-                }
-
-                EventManager.WriteMessage(149, "FilterCallback", EventLevel.Verbose, "Received message Id#" + messageSend.MessageId + " type:" + messageSend.MessageType
-                    + " CreateOptions:" + messageSend.CreateOptions.ToString("X") + " infoClass:" + messageSend.InfoClass + " fileName:" + messageSend.FileName );
-
-                filterMessage.AddMessage(messageSend);
-
-                FileProtectorUnitTest.FileIOEventHandler(messageSend);
-
-                if (replyDataPtr.ToInt64() != 0)
-                {
-                    FilterAPI.MessageReplyData messageReply = (FilterAPI.MessageReplyData)Marshal.PtrToStructure(replyDataPtr, typeof(FilterAPI.MessageReplyData));
-
-                    //if (messageSend.MessageType == (uint)FilterAPI.FilterCommand.FILTER_SEND_PROCESS_TERMINATION_INFO)
-                    //{
-                    //    //the process termination callback, you can get the notification if you register the callback setting of the process filter.
-                    //}
-
-                    if (messageSend.MessageType == (uint)FilterAPI.FilterCommand.FILTER_SEND_PROCESS_CREATION_INFO)
-                    {
-                        //this is new process creation, you can block it here by returning the STATUS_ACCESS_DENIED, below is the process information
-                        FilterAPI.PROCESS_INFO processInfo = (FilterAPI.PROCESS_INFO)Marshal.PtrToStructure(sendDataPtr, typeof(FilterAPI.PROCESS_INFO));
-
-                        messageReply.ReturnStatus = processInfo.Status;
-                        Marshal.StructureToPtr(messageReply, replyDataPtr, true);
-                    }                 
-                    else if ( messageSend.MessageType == (uint)FilterAPI.FilterCommand.FILTER_REQUEST_ENCRYPTION_IV_AND_KEY )
-                    {
-                        //this is encryption filter rule with boolean config "REQUEST_ENCRYPT_KEY_AND_IV_FROM_SERVICE" enabled.                        
-                        //the filter driver request the IV and key to open or create the encrypted file.                        
-
-                        //if you want to deny the file open or creation, you set the value as below:
-                        //messageReply.ReturnStatus = (uint)FilterAPI.NTSTATUS.STATUS_ACCESS_DENIED;
-                        //messageReply.FilterStatus = (uint)FilterAPI.FilterStatus.FILTER_COMPLETE_PRE_OPERATION;
-
-                        EventManager.WriteMessage(200, "filtercallback", EventLevel.Verbose, messageSend.FileName + " FILTER_REQUEST_ENCRYPTION_IV_AND_KEY" );
-
-                        //Here we return the test iv and key to the filter driver, you need to replace with you own iv and key in your code.
-                        AESDataBuffer  aesData = new AESDataBuffer();
-                        aesData.AccessFlags = FilterAPI.ALLOW_MAX_RIGHT_ACCESS;
-                        aesData.IV = FilterAPI.DEFAULT_IV_TAG;
-                        aesData.IVLength = (uint)aesData.IV.Length;
-                        aesData.EncryptionKey = Utils.GetKeyByPassPhrase(DigitalRightControl.PassPhrase,32);
-                        aesData.EncryptionKeyLength = (uint)aesData.EncryptionKey.Length;
-
-                        byte[] aesDataArray = DigitalRightControl.ConvertAESDataToByteArray(aesData);
-                        messageReply.DataBufferLength = (uint)aesDataArray.Length;
-                        Array.Copy(aesDataArray,messageReply.DataBuffer,aesDataArray.Length);
-
-                        messageReply.ReturnStatus = (uint)FilterAPI.NTSTATUS.STATUS_SUCCESS;
-
-
-                    }
-                    else
-                    {
-                        //this is for control filter driver when the pre-IO was registered.
-
-                        //here you can control the IO behaviour and modify the data.
-                        if (!FileProtectorUnitTest.UnitTestCallbackHandler(messageSend) || !FilterService.AuthorizeFileAccess(messageSend, ref messageReply))
-                        {
-                            //to comple the PRE_IO
-                            messageReply.ReturnStatus = (uint)FilterAPI.NTSTATUS.STATUS_ACCESS_DENIED;
-                            messageReply.FilterStatus = (uint)FilterAPI.FilterStatus.FILTER_COMPLETE_PRE_OPERATION;
-
-                            EventManager.WriteMessage(160, "FilterCallback", EventLevel.Error, "Return error for I/O request:" + ((FilterAPI.MessageType)messageSend.MessageType).ToString() +
-                                ",fileName:" + messageSend.FileName);
-                        }
-                        else
-                        {
-
-                            messageReply.MessageId = messageSend.MessageId;
-                            messageReply.MessageType = messageSend.MessageType;
-                            messageReply.ReturnStatus = (uint)FilterAPI.NTSTATUS.STATUS_SUCCESS;
-
-                        }
-
-                    }
-
-                    Marshal.StructureToPtr(messageReply, replyDataPtr, true);
-                }
-             
-                return ret;
-            }
-            catch (Exception ex)
-            {
-                EventManager.WriteMessage(134, "FilterCallback", EventLevel.Error, "filter callback exception." + ex.Message);
-                return false;
-            }
-
-        }
-
-        void DisconnectCallback()
-        {
-            EventManager.WriteMessage(190, "DisconnectCallback", EventLevel.Information, "Filter Disconnected." + FilterAPI.GetLastErrorMessage());
-        }
-
 
         private void settingsToolStripMenuItem_Click(object sender, EventArgs e)
         {
             SettingsForm settingForm = new SettingsForm();
             settingForm.StartPosition = FormStartPosition.CenterParent;
-            settingForm.ShowDialog();
+            if (settingForm.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            {
+                SendSettingsToFilter();
+            }
         }
 
 
-        private void toolStripButton1_Click(object sender, EventArgs e)
+        private void toolStripDisplayEvent_Click(object sender, EventArgs e)
         {
             EventForm.DisplayEventForm();
         }
 
         private void encryptFileWithToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            EncryptedFileForm encryptForm = new EncryptedFileForm("Encrypt file", FilterAPI.EncryptType.Encryption);
+            EncryptedFileForm encryptForm = new EncryptedFileForm("Encrypt file", Utils.EncryptType.Encryption);
             encryptForm.ShowDialog();
         }
 
         private void decryptFileToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            EncryptedFileForm encryptForm = new EncryptedFileForm("Decrypt file", FilterAPI.EncryptType.Decryption);
+            EncryptedFileForm encryptForm = new EncryptedFileForm("Decrypt file", Utils.EncryptType.Decryption);
             encryptForm.ShowDialog();
         }
 
-        private void getEncryptedFileIVTagToolStripMenuItem_Click(object sender, EventArgs e)
+        private void decryptFileWithOffsetToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            DecryptedFileForm decryptForm = new DecryptedFileForm();
+            decryptForm.ShowDialog();
+        }
+
+
+        private void getEncryptedFileTagdataToolStripMenuItem_Click(object sender, EventArgs e)
         {
             InputForm inputForm = new InputForm("Input file name", "Plase input file name", "");
 
@@ -291,48 +303,42 @@ namespace FileProtector
             {
                 string fileName = inputForm.InputText;
 
-                //by default we set the custom tag data with iv data
-
-                byte[] iv = new Byte[16];
-                uint ivLength = (uint)iv.Length;
-                bool retVal = FilterAPI.GetAESTagData(fileName, ref ivLength, iv);
+                byte[] tagData = new Byte[FilterAPI.MAX_AES_TAG_SIZE];
+                uint tagDataLength = (uint)tagData.Length;
+                bool retVal = FilterAPI.GetAESTagData(fileName, ref tagDataLength, tagData);
 
                 if (!retVal)
                 {
                     MessageBoxHelper.PrepToCenterMessageBoxOnForm(this);
-                    MessageBox.Show("GetAESTagData failed with error " + FilterAPI.GetLastErrorMessage(), "GetAESTagData", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show("GetAESTagData failed with error:" + FilterAPI.GetLastErrorMessage(), "GetAESTagData", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
 
                 MessageBoxHelper.PrepToCenterMessageBoxOnForm(this);
-                MessageBox.Show("Get encrypted file " + fileName + " tag data succeeded.", "IV Tag", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show("Get encrypted file " + fileName + " tag data succeeded. return tag data length:" + tagDataLength, "tagData", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
 
         private void exitToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            FilterAPI.ResetConfigData();
+            GlobalConfig.Stop();
+            filterControl.StopFilter();
             Close();
         }
 
   
         private void ProtectorForm_FormClosed(object sender, FormClosedEventArgs e)
         {
-            MessageBoxHelper.PrepToCenterMessageBoxOnForm(this);
-            if (MessageBox.Show("Do you want to minimize to system tray?", "Close", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == System.Windows.Forms.DialogResult.Yes)
-            {
-
-            }
-            else
-            {
-                FilterAPI.StopFilter();
-                GlobalConfig.Stop();
-                Application.Exit();
-            }
+            FilterAPI.ResetConfigData();
+            GlobalConfig.Stop();            
+            filterControl.StopFilter();
+            Application.Exit();
         }
 
         private void unInstallFilterDriverToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            FilterAPI.StopFilter();
+            filterControl.StopFilter();
             FilterAPI.UnInstallDriver();
         }     
 
@@ -344,43 +350,28 @@ namespace FileProtector
 
         private void toolStripButton_LoadMessage_Click(object sender, EventArgs e)
         {
-            filterMessage.LoadMessageFromLogToConsole();
+            messageHandler.LoadMessageFromLogToConsole();
         }
 
         private void toolStripButton_UnitTest_Click(object sender, EventArgs e)
         {
-            toolStripButton_StartFilter_Click(null, null);
-           // System.Threading.Tasks.Task.Factory.StartNew(() => { ProtectorUnitTest(); });
-            ProtectorUnitTest();
-
-        }
-
-        private void ProtectorUnitTest()
-        {
+            toolStripButton_Stop_Click(null, null);
             FileProtectorUnitTest fileProtectorUnitTest = new FileProtectorUnitTest();
+            FileProtectorUnitTest.licenseKey = GlobalConfig.LicenseKey;
+
             fileProtectorUnitTest.ShowDialog();
         }
 
-        private void toolStripButton_TestTool_Click(object sender, EventArgs e)
-        {
-            string name = Path.Combine(GlobalConfig.AssemblyPath, "FileIOTest.exe");
-
-            if (!File.Exists(name))
-            {
-                MessageBoxHelper.PrepToCenterMessageBoxOnForm(this);
-                MessageBox.Show(name + " doesn't exist.");
-                return;
-            }
-
-            Process testTool = new Process();
-            testTool.StartInfo.FileName = name;
-            testTool.Start();
-        }
-
+     
         private void toolStripButton_Help_Click(object sender, EventArgs e)
         {
-            System.Diagnostics.Process.Start("http://www.easefilter.com/programming.htm");
+            System.Diagnostics.Process.Start("https://blog.easefilter.com/file-protector-demo-step-by-step/");
         }
 
+        private void toolStripButton_ApplyTrialKey_Click(object sender, EventArgs e)
+        {
+            return;
+        }
+       
     }
 }

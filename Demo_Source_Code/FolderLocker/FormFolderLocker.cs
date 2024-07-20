@@ -28,43 +28,56 @@ using System.Configuration;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
+using EaseFilter.FilterControl;
 using EaseFilter.CommonObjects;
 
 namespace EaseFilter.FolderLocker
 {
     public partial class Form_FolderLocker:  Form
     {
-        //Purchase a license key with the link: http://www.easefilter.com/Order.htm
-        //Email us to request a trial key: info@easefilter.com //free email is not accepted.
-        string registerKey = GlobalConfig.registerKey;
+      
+        FilterControl.FilterControl filterControl = new FilterControl.FilterControl();
+
+        void SendSettingsToFilter()
+        {
+            try
+            {
+                filterControl.ClearFilters();
+
+                foreach (FileFilterRule filterRule in GlobalConfig.FilterRules.Values)
+                {
+                    FileFilter fileFilter = filterRule.ToFileFilter();
+                    filterControl.AddFilter(fileFilter);
+                }
+
+
+                string lastError = string.Empty;
+                if (!filterControl.SendConfigSettingsToFilter(ref lastError))
+                {
+                    MessageBox.Show(lastError, "SendConfigSettingsToFilter", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("SendConfigSettingsToFilter exception:" + ex.Message, "SendConfigSettingsToFilter", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+
+        }
 
         public Form_FolderLocker()
         {
-
-            GlobalConfig.filterType = FilterAPI.FilterType.FILE_SYSTEM_MONITOR | FilterAPI.FilterType.FILE_SYSTEM_CONTROL | FilterAPI.FilterType.FILE_SYSTEM_ENCRYPTION
-                | FilterAPI.FilterType.FILE_SYSTEM_PROCESS | FilterAPI.FilterType.FILE_SYSTEM_REGISTRY;
-
-            EventManager.Output = EventOutputType.File;
+            GlobalConfig.filterType = FilterAPI.FilterType.MONITOR_FILTER | FilterAPI.FilterType.CONTROL_FILTER | FilterAPI.FilterType.ENCRYPTION_FILTER
+                | FilterAPI.FilterType.PROCESS_FILTER | FilterAPI.FilterType.REGISTRY_FILTER;
 
             InitializeComponent();
 
-            StartPosition = FormStartPosition.CenterScreen;
-
-            string lastError = string.Empty;
-            if (!FilterWorker.StartService(ref lastError))
-            {
-                MessageBoxHelper.PrepToCenterMessageBoxOnForm(this);
-                MessageBox.Show("Start service failed with error:" + lastError + ",folder locker service will stop.", "Folder locker Service", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-
+            StartPosition = FormStartPosition.CenterScreen;            
 
             InitFolderLockerListView();            
             InitAccessRightsListView();
 
-            InitShareFileListView();
-            RefreshSharedFilesInClient();
-
             DisplayVersion();
+          
         }
 
         private void DisplayVersion()
@@ -99,7 +112,7 @@ namespace EaseFilter.FolderLocker
             listView_LockFolders.Columns.Add("Copyable", 70, System.Windows.Forms.HorizontalAlignment.Left);
             listView_LockFolders.Columns.Add("Visible", 70, System.Windows.Forms.HorizontalAlignment.Left);
 
-            foreach (FilterRule filterRule in GlobalConfig.FilterRules.Values)
+            foreach (FileFilterRule filterRule in GlobalConfig.FilterRules.Values)
             {
                 string folderName = filterRule.IncludeFileFilterMask.Replace("\\*","");
                 uint accessFlags = filterRule.AccessFlag;
@@ -148,9 +161,9 @@ namespace EaseFilter.FolderLocker
             if (listView_LockFolders.SelectedItems.Count == 1)
             {
                 System.Windows.Forms.ListViewItem item = listView_LockFolders.SelectedItems[0];
-                FilterRule filterRule = (FilterRule)item.Tag;
+                FileFilterRule filterRule = (FileFilterRule)item.Tag;
 
-                string[] processRights = filterRule.ProcessRights.Split(new char[] { ';' });
+                string[] processRights = filterRule.ProcessNameRights.Split(new char[] { ';' });
                 if (processRights.Length > 0)
                 {
                     foreach (string processRight in processRights)
@@ -208,7 +221,6 @@ namespace EaseFilter.FolderLocker
             }
 
         }
-
    
         private void linkLabel_Report_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
@@ -222,18 +234,9 @@ namespace EaseFilter.FolderLocker
 
         private void Form_FolderLocker_FormClosed(object sender, FormClosedEventArgs e)
         {
-            MessageBoxHelper.PrepToCenterMessageBoxOnForm(this);
-            if (MessageBox.Show("Do you want to minimize to system tray?", "Close", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == System.Windows.Forms.DialogResult.Yes)
-            {
-
-            }
-            else
-            {
-                GlobalConfig.Stop();
-                FilterAPI.StopFilter();
-
-                Application.Exit();
-            }
+             GlobalConfig.Stop();
+             filterControl.StopFilter();
+             Application.Exit();
         }
 
     
@@ -243,11 +246,13 @@ namespace EaseFilter.FolderLocker
 
             if (folderLocker.ShowDialog() == System.Windows.Forms.DialogResult.OK)
             {
-                FilterRule filterRule = folderLocker.filterRule;
+                FileFilterRule filterRule = folderLocker.filterRule;
 
-                GlobalConfig.AddFilterRule(filterRule);
+                GlobalConfig.AddFileFilterRule(filterRule);
 
                 GlobalConfig.SaveConfigSetting();
+
+                SendSettingsToFilter();
 
                 InitFolderLockerListView();
             }
@@ -269,9 +274,11 @@ namespace EaseFilter.FolderLocker
                 if (MessageBox.Show("Are you sure you want to remove a folder from locker?", "Delete Folder", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == System.Windows.Forms.DialogResult.Yes)
                 {
                     System.Windows.Forms.ListViewItem item = listView_LockFolders.SelectedItems[0];
-                    GlobalConfig.RemoveFilterRule(((FilterRule)item.Tag).IncludeFileFilterMask);
+                    GlobalConfig.RemoveFilterRule(((FileFilterRule)item.Tag).IncludeFileFilterMask);
 
                     GlobalConfig.SaveConfigSetting();
+
+                    SendSettingsToFilter();
 
                     InitFolderLockerListView();
                 }
@@ -288,15 +295,17 @@ namespace EaseFilter.FolderLocker
             }
 
             System.Windows.Forms.ListViewItem item = listView_LockFolders.SelectedItems[0];
-            FolderLockerSettigs folderLocker = new FolderLockerSettigs((FilterRule)item.Tag);
+            FolderLockerSettigs folderLocker = new FolderLockerSettigs((FileFilterRule)item.Tag);
 
             if (folderLocker.ShowDialog() == System.Windows.Forms.DialogResult.OK)
             {
-                FilterRule filterRule = folderLocker.filterRule;
+                FileFilterRule filterRule = folderLocker.filterRule;
 
-                GlobalConfig.RemoveFilterRule(((FilterRule)item.Tag).IncludeFileFilterMask);
-                GlobalConfig.AddFilterRule(filterRule);
+                GlobalConfig.RemoveFilterRule(((FileFilterRule)item.Tag).IncludeFileFilterMask);
+                GlobalConfig.AddFileFilterRule(filterRule);
                 GlobalConfig.SaveConfigSetting();
+
+                SendSettingsToFilter();
 
                 InitFolderLockerListView();
             }
@@ -308,6 +317,41 @@ namespace EaseFilter.FolderLocker
         private void listView_LockFolders_SelectedIndexChanged(object sender, EventArgs e)
         {
             InitAccessRightsListView();
+        }
+
+        private void toolStripButton_StartFilter_Click(object sender, EventArgs e)
+        {
+            //Purchase a license key with the link: http://www.easefilter.com/Order.htm
+            //Email us to request a trial key: info@easefilter.com //free email is not accepted.        
+            string licenseKey = GlobalConfig.LicenseKey;
+
+            string lastError = string.Empty;
+            bool ret = filterControl.StartFilter(GlobalConfig.filterType, GlobalConfig.FilterConnectionThreads, GlobalConfig.ConnectionTimeOut, licenseKey, ref lastError);
+            if (!ret)
+            {
+                MessageBoxHelper.PrepToCenterMessageBoxOnForm(this);
+                MessageBox.Show("Start filter failed." + lastError, "StartFilter", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            SendSettingsToFilter();
+
+            toolStripButton_StartFilter.Enabled = false;
+            toolStripButton_Stop.Enabled = true;
+        }
+
+        private void toolStripButton_Stop_Click(object sender, EventArgs e)
+        {
+            GlobalConfig.Stop();
+            filterControl.StopFilter();
+
+            toolStripButton_StartFilter.Enabled = true;
+            toolStripButton_Stop.Enabled = false;
+        }
+
+        private void toolStripButton_ApplyTrialKey_Click(object sender, EventArgs e)
+        {
+            
         }
 
        

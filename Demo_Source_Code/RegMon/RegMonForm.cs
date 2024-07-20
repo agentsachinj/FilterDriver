@@ -28,37 +28,33 @@ using System.Windows.Forms;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
+using EaseFilter.FilterControl;
 using EaseFilter.CommonObjects;
 
 namespace RegMon
 {
     public partial class RegMonForm : Form
-    {
-         //Purchase a license key with the link: http://www.easefilter.com/Order.htm
-        //Email us to request a trial key: info@easefilter.com //free email is not accepted.
-        string registerKey = GlobalConfig.registerKey;
-
-        RegistryMessage filterMessage = null;
+    {        
+        RegistryHandler registryHandler = null;
+        FilterControl filterControl = new FilterControl();        
 
         public RegMonForm()
         {
-            GlobalConfig.filterType = FilterAPI.FilterType.FILE_SYSTEM_REGISTRY;
+            GlobalConfig.filterType = FilterAPI.FilterType.REGISTRY_FILTER;
 
             InitializeComponent();
 
             StartPosition = FormStartPosition.CenterScreen;
-            filterMessage = new RegistryMessage(listView_Info);
-
             DisplayVersion();
 
-            InitListView();
+            registryHandler = new RegistryHandler(listView_Info);
 
         }
 
         ~RegMonForm()
         {
-            FilterAPI.StopFilter();
             GlobalConfig.Stop();
+            filterControl.StopFilter();
         }
 
         private void DisplayVersion()
@@ -77,28 +73,11 @@ namespace RegMon
             this.Text += "    Version:  " + version;
         }
 
-
-
-        public void InitListView()
-        {
-            listView_Info.Clear();		//clear control
-            //create column header for ListView
-            listView_Info.Columns.Add("#", 40, System.Windows.Forms.HorizontalAlignment.Left);
-            listView_Info.Columns.Add("Time", 100, System.Windows.Forms.HorizontalAlignment.Left);
-            listView_Info.Columns.Add("UserName", 150, System.Windows.Forms.HorizontalAlignment.Left);
-            listView_Info.Columns.Add("ProcessName(PID)", 100, System.Windows.Forms.HorizontalAlignment.Left);
-            listView_Info.Columns.Add("ThreadId", 60, System.Windows.Forms.HorizontalAlignment.Left);
-            listView_Info.Columns.Add("RegCallbackClassName", 160, System.Windows.Forms.HorizontalAlignment.Left);
-            listView_Info.Columns.Add("KeyName", 300, System.Windows.Forms.HorizontalAlignment.Left);
-            listView_Info.Columns.Add("Return Status", 100, System.Windows.Forms.HorizontalAlignment.Left);
-            listView_Info.Columns.Add("Description", 400, System.Windows.Forms.HorizontalAlignment.Left);
-        }
-
         private void RegMonForm_FormClosing(object sender, FormClosingEventArgs e)
         {
             FilterAPI.ResetConfigData();
-            FilterAPI.StopFilter();
             GlobalConfig.Stop();
+            filterControl.StopFilter();
             Application.Exit();
         }
 
@@ -106,47 +85,115 @@ namespace RegMon
         {
             MessageBoxHelper.PrepToCenterMessageBoxOnForm(this);
             RegistryAccessControlForm regitryAccessControlForm = new RegistryAccessControlForm();
-            regitryAccessControlForm.ShowDialog();
+            if (regitryAccessControlForm.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            {
+                SendSettingsToFilter();
+            }
         }
+
+        void SendSettingsToFilter()
+        {
+            filterControl.ClearFilters();
+
+            GlobalConfig.Load();
+
+            if (GlobalConfig.RegistryFilterRules.Count == 0)
+            {
+                MessageBoxHelper.PrepToCenterMessageBoxOnForm(this);
+                MessageBox.Show("You don't have any registry filter setup, please go to the settings to add a new filter rule, or the filter driver won't intercept any process or IO.");
+            }
+
+            foreach (RegistryFilterRule filterRule in GlobalConfig.RegistryFilterRules.Values)
+            {
+                RegistryFilter registryFilter = filterRule.ToRegistryFilter();
+
+                registryFilter.NotifyRegWasBlocked += registryHandler.NotifyRegWasBlocked;
+
+                registryFilter.OnPreDeleteKey += registryHandler.OnPreDeleteKey;
+                registryFilter.OnPreSetValueKey += registryHandler.OnPreSetValueKey;
+                registryFilter.OnPreDeleteValueKey += registryHandler.OnPreDeleteValueKey;
+                registryFilter.OnPreSetInformationKey += registryHandler.OnPreSetInformationKey;
+                registryFilter.OnPreRenameKey += registryHandler.OnPreRenameKey;
+                registryFilter.OnPreEnumerateKey += registryHandler.OnPreEnumerateKey;
+                registryFilter.OnPreEnumerateValueKey += registryHandler.OnPreEnumerateValueKey;
+                registryFilter.OnPreQueryKey += registryHandler.OnPreQueryKey;
+                registryFilter.OnPreQueryValueKey += registryHandler.OnPreQueryValueKey;
+                registryFilter.OnPreQueryMultipleValueKey += registryHandler.OnPreQueryMultipleValueKey;
+                registryFilter.OnPreCreateKey += registryHandler.OnPreCreateKey;
+                registryFilter.OnPreOpenKey += registryHandler.OnPreOpenKey;
+                registryFilter.OnPreKeyHandleClose += registryHandler.OnPreKeyHandleClose;
+                registryFilter.OnPreCreateKeyEx += registryHandler.OnPreCreateKeyEx;
+                registryFilter.OnPreOpenKeyEx += registryHandler.OnPreOpenKeyEx;
+                registryFilter.OnPreFlushKey += registryHandler.OnPreFlushKey;
+                registryFilter.OnPreLoadKey += registryHandler.OnPreLoadKey;
+                registryFilter.OnPreUnLoadKey += registryHandler.OnPreUnLoadKey;
+                registryFilter.OnPreQueryKeySecurity += registryHandler.OnPreQueryKeySecurity;
+                registryFilter.OnPreSetKeySecurity += registryHandler.OnPreSetKeySecurity;
+                registryFilter.OnPreRestoreKey += registryHandler.OnPreRestoreKey;
+                registryFilter.OnPreSaveKey += registryHandler.OnPreSaveKey;
+                registryFilter.OnPreReplaceKey += registryHandler.OnPreReplaceKey;
+                registryFilter.OnPreQueryKeyName += registryHandler.OnPreQueryKeyName;
+
+                registryFilter.NotifyDeleteKey += registryHandler.NotifyDeleteKey;
+                registryFilter.NotifySetValueKey += registryHandler.NotifySetValueKey;
+                registryFilter.NotifyDeleteValueKey += registryHandler.NotifyDeleteValueKey;
+                registryFilter.NotifySetInformationKey += registryHandler.NotifySetInformationKey;
+                registryFilter.NotifyRenameKey += registryHandler.NotifyRenameKey;
+                registryFilter.NotifyEnumerateKey += registryHandler.NotifyEnumerateKey;
+                registryFilter.NotifyEnumerateValueKey += registryHandler.NotifyEnumerateValueKey;
+                registryFilter.NotifyQueryKey += registryHandler.NotifyQueryKey;
+                registryFilter.NotifyQueryValueKey += registryHandler.NotifyQueryValueKey;
+                registryFilter.NotifyQueryMultipleValueKey += registryHandler.NotifyQueryMultipleValueKey;
+                registryFilter.NotifyCreateKey += registryHandler.NotifyCreateKey;
+                registryFilter.NotifyOpenKey += registryHandler.NotifyOpenKey;
+                registryFilter.NotifyKeyHandleClose += registryHandler.NotifyKeyHandleClose;
+                registryFilter.NotifyCreateKeyEx += registryHandler.NotifyCreateKeyEx;
+                registryFilter.NotifyOpenKeyEx += registryHandler.NotifyOpenKeyEx;
+                registryFilter.NotifyFlushKey += registryHandler.NotifyFlushKey;
+                registryFilter.NotifyLoadKey += registryHandler.NotifyLoadKey;
+                registryFilter.NotifyUnLoadKey += registryHandler.NotifyUnLoadKey;
+                registryFilter.NotifyQueryKeySecurity += registryHandler.NotifyQueryKeySecurity;
+                registryFilter.NotifySetKeySecurity += registryHandler.NotifySetKeySecurity;
+                registryFilter.NotifyRestoreKey += registryHandler.NotifyRestoreKey;
+                registryFilter.NotifySaveKey += registryHandler.NotifySaveKey;
+                registryFilter.NotifyReplaceKey += registryHandler.NotifyReplaceKey;
+                registryFilter.NotifyQueryKeyName += registryHandler.NotifyQueryKeyName;
+
+                filterControl.AddFilter(registryFilter);
+            }
+
+
+            string lastError = string.Empty;
+            if (!filterControl.SendConfigSettingsToFilter(ref lastError))
+            {
+                MessageBox.Show(lastError, "StartFilter", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+
+        }
+      
 
         private void toolStripButton_StartFilter_Click(object sender, EventArgs e)
         {
             try
             {
+                //Purchase a license key with the link: http://www.easefilter.com/Order.htm
+                //Email us to request a trial key: info@easefilter.com //free email is not accepted.        
+                string licenseKey = GlobalConfig.LicenseKey;
+
                 string lastError = string.Empty;
 
-                bool ret = FilterAPI.StartFilter((int)GlobalConfig.FilterConnectionThreads
-                                            , registerKey
-                                            , new FilterAPI.FilterDelegate(FilterCallback)
-                                            , new FilterAPI.DisconnectDelegate(DisconnectCallback)
-                                            , ref lastError);
+                bool ret = filterControl.StartFilter(GlobalConfig.filterType, GlobalConfig.FilterConnectionThreads, GlobalConfig.ConnectionTimeOut, licenseKey, ref lastError);
                 if (!ret)
                 {
                     MessageBoxHelper.PrepToCenterMessageBoxOnForm(this);
-                    MessageBox.Show("Start filter failed." + lastError);
+                    MessageBox.Show("Start filter failed." + lastError, "StartFilter", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
 
+                SendSettingsToFilter();
+
                 toolStripButton_StartFilter.Enabled = false;
                 toolStripButton_Stop.Enabled = true;
-
-
-                if (GlobalConfig.RegistryFilterRules.Count == 0 && null != sender)
-                {
-                    RegistryFilterRule regFilterRule = new RegistryFilterRule();
-                    regFilterRule.ProcessNameFilterMask = "*";
-                    regFilterRule.AccessFlag = FilterAPI.MAX_REGITRY_ACCESS_FLAG;
-                    regFilterRule.RegCallbackClass = 93092006832128;
-
-                    GlobalConfig.AddRegistryFilterRule(regFilterRule);
-
-                    MessageBoxHelper.PrepToCenterMessageBoxOnForm(this);
-                    MessageBox.Show("You didn't setup any filtere rule, by defult it will monitor all registry access.");
-                }
-
-
-
-                GlobalConfig.SendConfigSettingsToFilter();
 
                 EventManager.WriteMessage(102, "StartFilter", EventLevel.Information, "Start filter service succeeded.");
             }
@@ -156,56 +203,11 @@ namespace RegMon
             }
         }
 
-        Boolean FilterCallback(IntPtr sendDataPtr, IntPtr replyDataPtr)
-        {
-            Boolean ret = true;
-
-            try
-            {
-                FilterAPI.MessageSendData messageSend = (FilterAPI.MessageSendData)Marshal.PtrToStructure(sendDataPtr, typeof(FilterAPI.MessageSendData));
-
-                if (FilterAPI.MESSAGE_SEND_VERIFICATION_NUMBER != messageSend.VerificationNumber)
-                {
-                    MessageBoxHelper.PrepToCenterMessageBoxOnForm(this);
-                    MessageBox.Show("Received message corrupted.Please check if the MessageSendData structure is correct.");
-
-                    EventManager.WriteMessage(139, "FilterCallback", EventLevel.Error, "Received message corrupted.Please check if the MessageSendData structure is correct.");
-                    return false;
-                }
-
-                filterMessage.AddMessage(messageSend);
-
-                if (replyDataPtr.ToInt64() != 0)
-                {
-                    FilterAPI.MessageReplyData messageReply = (FilterAPI.MessageReplyData)Marshal.PtrToStructure(replyDataPtr, typeof(FilterAPI.MessageReplyData));
-
-                    if (messageSend.MessageType == (uint)FilterAPI.FilterCommand.FILTER_SEND_REG_CALLBACK_INFO)
-                    {
-                        //this is registry callback request
-                        RegistryHandler.AuthorizeRegistryAccess(messageSend, ref messageReply);
-                        Marshal.StructureToPtr(messageReply, replyDataPtr, true);
-                    }
-                }
-
-                return ret;
-            }
-            catch (Exception ex)
-            {
-                EventManager.WriteMessage(134, "FilterCallback", EventLevel.Error, "filter callback exception." + ex.Message);
-                return false;
-            }
-
-        }
-
-        void DisconnectCallback()
-        {
-            EventManager.WriteMessage(190, "DisconnectCallback", EventLevel.Information, "Filter Disconnected." + FilterAPI.GetLastErrorMessage());
-        }
-
+       
         private void toolStripButton_Stop_Click(object sender, EventArgs e)
         {
             FilterAPI.ResetConfigData();
-            FilterAPI.StopFilter();
+            filterControl.StopFilter();
 
             toolStripButton_StartFilter.Enabled = true;
             toolStripButton_Stop.Enabled = false;
@@ -213,13 +215,13 @@ namespace RegMon
 
         private void toolStripButton_ClearMessage_Click(object sender, EventArgs e)
         {
-            InitListView();
+            registryHandler.InitListView();
         }
 
         private void toolStripButton_UnitTest_Click(object sender, EventArgs e)
         {
-            toolStripButton_StartFilter_Click(null, null);
-            RegUnitTest regUnitTest = new RegUnitTest();
+            toolStripButton_Stop_Click(null, null);
+            RegUnitTest regUnitTest = new RegUnitTest(GlobalConfig.LicenseKey );
             regUnitTest.ShowDialog();
         }
 
@@ -227,10 +229,13 @@ namespace RegMon
         {
             Close();
         }
+      
 
-        private void toolsToolStripMenuItem_Click(object sender, EventArgs e)
+        private void toolStripButton_ApplyTrialKey_Click(object sender, EventArgs e)
         {
-
+           
         }
+
+    
     }
 }

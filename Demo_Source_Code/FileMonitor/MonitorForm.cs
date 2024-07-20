@@ -29,47 +29,49 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 using EaseFilter.CommonObjects;
+using EaseFilter.FilterControl;
 
 namespace FileMonitor
 {
+
     public partial class MonitorForm : Form
     {
-        //Purchase a license key with the link: http://www.easefilter.com/Order.htm
-        //Email us to request a trial key: info@easefilter.com //free email is not accepted.
-        string registerKey = GlobalConfig.registerKey;
+                        
+        MonitorEventHandler monitorEventHandler = null;
+        FilterControl filterControl = new FilterControl();
 
-        FilterMessage filterMessage = null;
 
         public MonitorForm()
         {
 
-            GlobalConfig.filterType = FilterAPI.FilterType.FILE_SYSTEM_MONITOR;
-
-            InitializeComponent();
-
-            StartPosition = FormStartPosition.CenterScreen;
-
-            filterMessage = new FilterMessage(listView_Info);
-
-            DisplayVersion();
-
-        }
-
-        private void DisplayVersion()
-        {
-            string version = Assembly.GetExecutingAssembly().GetName().Version.ToString();
             try
             {
-                string filterDllPath = Path.Combine(GlobalConfig.AssemblyPath, "FilterAPI.Dll");
-                version = FileVersionInfo.GetVersionInfo(filterDllPath).ProductVersion;
+                GlobalConfig.filterType = FilterAPI.FilterType.MONITOR_FILTER;
+
+                InitializeComponent();
+                monitorEventHandler = new MonitorEventHandler(listView_Info);
+
+                StartPosition = FormStartPosition.CenterScreen;
+
+                this.Text += GlobalConfig.GetVersionInfo();
+
+                this.Load += new EventHandler(Form1_Load);
+
             }
             catch (Exception ex)
             {
-                EventManager.WriteMessage(43, "LoadFilterAPI Dll", EventLevel.Error, "FilterAPI.dll can't be found." + ex.Message);
+                MessageBox.Show("Start FileMonitor failed," + ex.Message, "Start failed.", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Close();
             }
 
-            this.Text += "    Version:  " + version;
         }
+
+        void Form1_Load(object sender, EventArgs e)
+        {
+            //to improve the listview performance
+            SendMessage(listView_Info.Handle, LVM_SETTEXTBKCOLOR, IntPtr.Zero, unchecked((IntPtr)(int)0xFFFFFF));
+        }
+      
 
         ~MonitorForm()
         {
@@ -81,41 +83,91 @@ namespace FileMonitor
             GlobalConfig.Stop();
         }
 
+        void SendSettingsToFilter()
+        {
+            filterControl.ClearFilters();
+
+            GlobalConfig.Load();
+
+            if (GlobalConfig.FilterRules.Count == 0)
+            {
+               // MessageBoxHelper.PrepToCenterMessageBoxOnForm(this);
+                MessageBox.Show("You don't have any monitor folder setup, please set up a filter rule in the settings, or there are no IOs will be filtered.", "FilterRule", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+              //  MessageBox.Show("You don't have any monitor folder setup, please set up a filter rule in the settings, or there are no IOs will be filtered.");
+            }
+
+            foreach (FileFilterRule filterRule in GlobalConfig.FilterRules.Values)
+            {
+                FileFilter fileFilter = filterRule.ToFileFilter();
+
+                //add the event handler for the file filter.
+                fileFilter.OnFileOpen += monitorEventHandler.OnFileOpen;
+                fileFilter.OnNewFileCreate += monitorEventHandler.OnFileCreate;
+                fileFilter.OnDeleteFile += monitorEventHandler.OnDeleteFile;                
+                fileFilter.OnFileRead += monitorEventHandler.OnFileRead;
+                fileFilter.OnFileWrite += monitorEventHandler.OnFileWrite;
+                                
+                fileFilter.OnQueryFileBasicInfo += monitorEventHandler.OnQueryFileBasicInfo;
+                fileFilter.OnQueryFileId += monitorEventHandler.OnQueryFileId;
+                fileFilter.OnQueryFileNetworkInfo += monitorEventHandler.OnQueryFileNetworkInfo;                
+                fileFilter.OnQueryFileSize += monitorEventHandler.OnQueryFileSize;
+                fileFilter.OnQueryFileStandardInfo += monitorEventHandler.OnQueryFileStandardInfo;
+                fileFilter.OnQueryFileInfo += monitorEventHandler.OnQueryFileInfo;
+
+                fileFilter.OnSetFileBasicInfo += monitorEventHandler.OnSetFileBasicInfo;
+                fileFilter.OnSetFileNetworkInfo += monitorEventHandler.OnSetFileNetworkInfo;
+                fileFilter.OnSetFileSize += monitorEventHandler.OnSetFileSize;
+                fileFilter.OnSetFileStandardInfo += monitorEventHandler.OnSetFileStandardInfo;
+                fileFilter.OnMoveOrRenameFile += monitorEventHandler.OnMoveOrRenameFile;
+                fileFilter.OnSetFileInfo += monitorEventHandler.OnSetFileInfo;
+
+                fileFilter.OnQueryFileSecurity += monitorEventHandler.OnQueryFileSecurity;
+                fileFilter.OnQueryDirectoryFile += monitorEventHandler.OnQueryDirectoryFile;
+                fileFilter.OnFileHandleClose += monitorEventHandler.OnFileHandleClose;
+                fileFilter.OnFileClose += monitorEventHandler.OnFileClose;
+
+                fileFilter.NotifyFileWasChanged += monitorEventHandler.NotifyFileWasChanged;
+
+                filterControl.AddFilter(fileFilter);
+            }
+
+            filterControl.VolumeControlFlag = (FilterAPI.VolumeControlFlag)GlobalConfig.VolumeControlFlag;
+            filterControl.NotifyFilterAttachToVolume -= monitorEventHandler.NotifyFilterAttachToVolume;
+            filterControl.NotifyFilterAttachToVolume += monitorEventHandler.NotifyFilterAttachToVolume;
+            filterControl.NotifyFilterDetachFromVolume -= monitorEventHandler.NotifyFilterDetachFromVolume;
+            filterControl.NotifyFilterDetachFromVolume += monitorEventHandler.NotifyFilterDetachFromVolume;
+
+            string lastError = string.Empty;
+            if (!filterControl.SendConfigSettingsToFilter(ref lastError))
+            {
+                MessageBox.Show(lastError, "StartFilter", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+
+
+        }
+
         private void toolStripButton_StartFilter_Click(object sender, EventArgs e)
         {
             try
             {
-                string lastError = string.Empty;
+                //Purchase a license key with the link: http://www.easefilter.com/Order.htm
+                //Email us to request a trial key: info@easefilter.com //free email is not accepted.        
+                string licenseKey = GlobalConfig.LicenseKey;
 
-                bool ret = FilterAPI.StartFilter( (int)GlobalConfig.FilterConnectionThreads
-                                            , registerKey
-                                            , new FilterAPI.FilterDelegate(FilterCallback)
-                                            , new FilterAPI.DisconnectDelegate(DisconnectCallback)
-                                            , ref lastError);
+                string lastError = string.Empty;                
+
+                bool ret = filterControl.StartFilter(FilterAPI.FilterType.MONITOR_FILTER, GlobalConfig.FilterConnectionThreads, GlobalConfig.ConnectionTimeOut, licenseKey, ref lastError);
                 if (!ret)
                 {
                     MessageBoxHelper.PrepToCenterMessageBoxOnForm(this);
-                    MessageBox.Show("Start filter failed." + lastError);
+                    MessageBox.Show("Start filter failed." + lastError, "StartFilter", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
 
+                SendSettingsToFilter();
+
                 toolStripButton_StartFilter.Enabled = false;
-                toolStripButton_Stop.Enabled = true;
-
-                if (GlobalConfig.FilterRules.Count == 0 && null != sender)
-                {
-                    FilterRule filterRule = new FilterRule();
-                    filterRule.IncludeFileFilterMask = "c:\\test\\*";
-                    filterRule.ExcludeFileFilterMasks = "c:\\windows*";
-                    filterRule.EventType = (uint)(FilterAPI.EVENTTYPE.WRITTEN | FilterAPI.EVENTTYPE.CREATED | FilterAPI.EVENTTYPE.DELETED | FilterAPI.EVENTTYPE.RENAMED);
-                    filterRule.AccessFlag = (uint)FilterAPI.ALLOW_MAX_RIGHT_ACCESS;
-                    GlobalConfig.FilterRules.Add(filterRule.IncludeFileFilterMask, filterRule);
-
-                    MessageBoxHelper.PrepToCenterMessageBoxOnForm(this);
-                    MessageBox.Show("You don't have any monitor folder setup, add c:\\test\\* as your default test folder, I/Os from c:\\test\\* will show up in the console.");
-                }
-
-                GlobalConfig.SendConfigSettingsToFilter();
+                toolStripButton_Stop.Enabled = true;            
 
                 EventManager.WriteMessage(102, "StartFilter", EventLevel.Information, "Start filter service succeeded.");
             }
@@ -128,7 +180,7 @@ namespace FileMonitor
 
         private void toolStripButton_Stop_Click(object sender, EventArgs e)
         {
-            FilterAPI.StopFilter();
+            filterControl.StopFilter();
 
             toolStripButton_StartFilter.Enabled = true;
             toolStripButton_Stop.Enabled = false;
@@ -136,65 +188,18 @@ namespace FileMonitor
 
         private void toolStripButton_ClearMessage_Click(object sender, EventArgs e)
         {
-            filterMessage.InitListView();
+            monitorEventHandler.InitListView();
         }
 
-        Boolean FilterCallback(IntPtr sendDataPtr, IntPtr replyDataPtr)
-        {
-            Boolean ret = true;
-
-            try
-            {
-                FilterAPI.MessageSendData messageSend = (FilterAPI.MessageSendData)Marshal.PtrToStructure(sendDataPtr, typeof(FilterAPI.MessageSendData));
-
-                if (FilterAPI.MESSAGE_SEND_VERIFICATION_NUMBER != messageSend.VerificationNumber)
-                {
-                    MessageBoxHelper.PrepToCenterMessageBoxOnForm(this);
-                    MessageBox.Show("Received message corrupted.Please check if the MessageSendData structure is correct.");
-
-                    EventManager.WriteMessage(139, "FilterCallback", EventLevel.Error, "Received message corrupted.Please check if the MessageSendData structure is correct.");
-
-                    return false;
-                }
-
-                filterMessage.AddMessage(messageSend);
-
-                MonitorDemo.UnitTestCallbackHandler(messageSend);
-
-                string info = "FileMonitor process request " + FilterMessage.FormatIOName(messageSend) + ",pid:" + messageSend.ProcessId +
-                           " ,filename:" + messageSend.FileName + ",return status:" + FilterMessage.FormatStatus(messageSend.Status);
-
-                if (messageSend.Status == (uint)NtStatus.Status.Success)
-                {
-                    ret = false;
-                    EventManager.WriteMessage(98, "FilterCallback", EventLevel.Verbose, info);
-                }
-                else
-                {
-                    ret = true;
-                    EventManager.WriteMessage(98, "FilterCallback", EventLevel.Error, info);
-                }
-
-                return ret;
-            }
-            catch (Exception ex)
-            {
-                EventManager.WriteMessage(134, "FilterCallback", EventLevel.Error, "filter callback exception." + ex.Message);
-                return false;
-            }
-
-        }
-
-        void DisconnectCallback()
-        {
-           EventManager.WriteMessage(165,"DisconnectCallback", EventLevel.Information,"Filter Disconnected." + FilterAPI.GetLastErrorMessage());
-        }
 
         private void settingsToolStripMenuItem_Click(object sender, EventArgs e)
         {
             SettingsForm settingForm = new SettingsForm();
             settingForm.StartPosition = FormStartPosition.CenterParent;
-            settingForm.ShowDialog();
+            if (settingForm.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            {
+                SendSettingsToFilter();
+            }
         }
 
 
@@ -208,60 +213,44 @@ namespace FileMonitor
             Close();
         }
 
+
         private void MonitorForm_FormClosed(object sender, FormClosedEventArgs e)
         {
-            MessageBoxHelper.PrepToCenterMessageBoxOnForm(this);
-            if (MessageBox.Show("Do you want to minimize to system tray?", "Close", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == System.Windows.Forms.DialogResult.Yes)
-            {
-
-            }
-            else
-            {
-                GlobalConfig.Stop();
-                Application.Exit();
-            }
+            FilterAPI.ResetConfigData();
+            GlobalConfig.Stop();
+            filterControl.StopFilter();
+            Application.Exit();
         }
 
         private void unInstallFilterDriverToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            FilterAPI.StopFilter();
-            FilterAPI.UnInstallDriver();
+            string lastError = string.Empty;
+            filterControl.StopFilter();
+            filterControl.UnInstallDriver(ref lastError);
         }
 
         private void toolStripButton_LoadMessage_Click(object sender, EventArgs e)
         {
-            filterMessage.LoadMessageFromLogToConsole();
+            monitorEventHandler.LoadMessageFromLogToConsole();
         }
 
         private void toolStripButton_UnitTest_Click(object sender, EventArgs e)
         {
-            toolStripButton_StartFilter_Click(null, null);
+            toolStripButton_Stop_Click(null, null);
+            MonitorUnitTest monitorDemo = new MonitorUnitTest();
+            monitorDemo.licenseKey = GlobalConfig.LicenseKey;
 
-            MonitorDemo monitorDemo = new MonitorDemo();
             monitorDemo.ShowDialog();
-        }
-
-      
-
-        private void toolStripButton_TestTool_Click(object sender, EventArgs e)
-        {
-            string name = Path.Combine(GlobalConfig.AssemblyPath, "FileIOTest.exe");
-
-            if (!File.Exists(name))
-            {
-                MessageBoxHelper.PrepToCenterMessageBoxOnForm(this);
-                MessageBox.Show(name +" doesn't exist.");
-                return;
-            }
-
-            Process testTool = new Process();
-            testTool.StartInfo.FileName = name;
-            testTool.Start();
         }
 
         private void toolStripButton_Help_Click(object sender, EventArgs e)
         {
-            System.Diagnostics.Process.Start("http://www.easefilter.com/programming.htm");
+            System.Diagnostics.Process.Start("https://blog.easefilter.com/file-monitor-demo-step-by-step/");
+        }
+
+        private void toolStripButton_ApplyTrialKey_Click(object sender, EventArgs e)
+        {
+         
         }
 
     }

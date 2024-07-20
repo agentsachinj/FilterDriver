@@ -25,15 +25,16 @@ using System.Text;
 using System.IO;
 using System.Windows.Forms;
 
+using EaseFilter.FilterControl;
 using EaseFilter.CommonObjects;
 
 namespace FileProtector
 {
     public partial class EncryptedFileForm : Form
     {
-        FilterAPI.EncryptType encryptType = FilterAPI.EncryptType.Encryption;
+        Utils.EncryptType encryptType = Utils.EncryptType.Encryption;
 
-        public EncryptedFileForm(string formName, FilterAPI.EncryptType encryptType)
+        public EncryptedFileForm(string formName, Utils.EncryptType encryptType)
         {
             InitializeComponent();
             this.Text = formName;
@@ -66,15 +67,17 @@ namespace FileProtector
             byte[] key = Utils.GetKeyByPassPhrase(passPhrase,32);
             byte[] iv = Utils.GetRandomIV();
 
-            if (encryptType == FilterAPI.EncryptType.Encryption)
+            if (encryptType == Utils.EncryptType.Encryption)
             {
                 if (fileName.Equals(targetFileName, StringComparison.CurrentCulture))
                 {
-                    retVal = FilterAPI.AESEncryptFileWithTag(fileName, (uint)key.Length, key, (uint)iv.Length, iv, (uint)iv.Length, iv);
+                    retVal = FilterAPI.AESEncryptFile(fileName, (uint)key.Length, key, (uint)iv.Length,iv, true);
+                    //retVal = FilterAPI.AESEncryptFileWithTag(fileName, (uint)key.Length, key, (uint)iv.Length, iv, (uint)iv.Length, iv);
                 }
                 else
                 {
-                    retVal = FilterAPI.AESEncryptFileToFileWithTag(fileName, targetFileName, (uint)key.Length, key, (uint)iv.Length, iv, (uint)iv.Length, iv);
+                    retVal = FilterAPI.AESEncryptFileToFile(fileName, targetFileName, (uint)key.Length, key, (uint)iv.Length, iv, true);
+                    //retVal = FilterAPI.AESEncryptFileToFileWithTag(fileName, targetFileName, (uint)key.Length, key, (uint)iv.Length, iv, (uint)iv.Length, iv);
                 }
             }
             else

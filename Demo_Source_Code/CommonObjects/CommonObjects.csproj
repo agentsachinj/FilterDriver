@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
@@ -10,30 +10,33 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>EaseFilter.CommonObjects</RootNamespace>
     <AssemblyName>CommonObjects</AssemblyName>
-    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <SccProjectName>SAK</SccProjectName>
     <SccLocalPath>SAK</SccLocalPath>
     <SccAuxPath>SAK</SccAuxPath>
     <SccProvider>SAK</SccProvider>
+    <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>..\..\Release\</OutputPath>
+    <OutputPath>..\debug\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>..\..\Release\</OutputPath>
+    <OutputPath>..\release\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <UseVSHostingProcess>false</UseVSHostingProcess>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
@@ -52,14 +55,24 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ConfigSetting.cs" />
+    <Compile Include="InputForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="InputForm.Designer.cs">
+      <DependentUpon>InputForm.cs</DependentUpon>
+    </Compile>
     <Compile Include="ProcessFilterRuleSection.cs" />
+    <Compile Include="ProcessFilterSetting.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="ProcessFilterSetting.Designer.cs">
+      <DependentUpon>ProcessFilterSetting.cs</DependentUpon>
+    </Compile>
     <Compile Include="Properties\Resources.Designer.cs">
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
       <DependentUpon>Resources.resx</DependentUpon>
     </Compile>
-    <Compile Include="DigitalRightControl.cs" />
-    <Compile Include="FileIOControlService.cs" />
     <Compile Include="AccessRightsForm.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -80,15 +93,7 @@
       <DependentUpon>EventForm.cs</DependentUpon>
     </Compile>
     <Compile Include="EventManager.cs" />
-    <Compile Include="FilterAPI.cs" />
-    <Compile Include="FilterMessage.cs" />
     <Compile Include="FilterRuleSection.cs" />
-    <Compile Include="InputForm.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="InputForm.Designer.cs">
-      <DependentUpon>InputForm.cs</DependentUpon>
-    </Compile>
     <Compile Include="MessageBoxHelper.cs" />
     <Compile Include="ControlFilterRuleSettigs.cs">
       <SubType>Form</SubType>
@@ -96,7 +101,6 @@
     <Compile Include="ControlFilterRuleSettigs.Designer.cs">
       <DependentUpon>ControlFilterRuleSettigs.cs</DependentUpon>
     </Compile>
-    <Compile Include="NtStatus.cs" />
     <Compile Include="OptionForm.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -105,15 +109,12 @@
     </Compile>
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="RegistryFilterRuleSection.cs" />
-    <Compile Include="RemotingService.cs" />
     <Compile Include="SettingsForm.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="SettingsForm.Designer.cs">
       <DependentUpon>SettingsForm.cs</DependentUpon>
     </Compile>
-    <Compile Include="Utils.cs" />
-    <Compile Include="WinDataStructures.cs" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="EventForm.resx">
@@ -125,14 +126,17 @@
     <EmbeddedResource Include="FilterRuleForm.resx">
       <DependentUpon>FilterRuleForm.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="InputForm.resx">
-      <DependentUpon>InputForm.cs</DependentUpon>
-    </EmbeddedResource>
     <EmbeddedResource Include="ControlFilterRuleSettigs.resx">
       <DependentUpon>ControlFilterRuleSettigs.cs</DependentUpon>
     </EmbeddedResource>
+    <EmbeddedResource Include="InputForm.resx">
+      <DependentUpon>InputForm.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="OptionForm.resx">
       <DependentUpon>OptionForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="ProcessFilterSetting.resx">
+      <DependentUpon>ProcessFilterSetting.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
@@ -150,6 +154,12 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\about.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\FilterControl\FilterControl.csproj">
+      <Project>{21540012-A296-45CE-8D35-3EA5A07B32A6}</Project>
+      <Name>FilterControl</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>

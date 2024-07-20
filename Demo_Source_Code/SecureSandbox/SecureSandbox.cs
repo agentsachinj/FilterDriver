@@ -28,6 +28,7 @@ using System.Diagnostics;
 using System.Windows.Forms;
 using System.Runtime.InteropServices;
 
+using EaseFilter.FilterControl;
 using EaseFilter.CommonObjects;
 
 namespace SecureSandbox
@@ -40,7 +41,7 @@ namespace SecureSandbox
         /// for example: set file filter mask c:\test\*, you can set the access rights to the files in c:\test.
         /// you also can add the specific process or user access rights to the files in c:\test
         /// </summary>
-        FilterRule selectedFilterRule = null;
+        FileFilterRule selectedFilterRule = null;
 
         /// <summary>
         /// Process filter rule is the access control of the process, set the file access rights to this process.
@@ -54,15 +55,15 @@ namespace SecureSandbox
         /// Registry filter rule is the access control of the registry, allow the process to access or change the registry.
         /// </summary>
         RegistryFilterRule selectedRegistryFilterRule = null;
+       
 
-        //Purchase a license key with the link: http://www.easefilter.com/Order.htm
-        //Email us to request a trial key: info@easefilter.com //free email is not accepted.
-        string registerKey = GlobalConfig.registerKey;
+        EncryptEventHandler encryptEventHandler = new EncryptEventHandler();
+        FilterControl filterControl = new FilterControl();    
 
         public SecureSandbox()
         {
-            GlobalConfig.filterType = FilterAPI.FilterType.FILE_SYSTEM_CONTROL | FilterAPI.FilterType.FILE_SYSTEM_ENCRYPTION
-                | FilterAPI.FilterType.FILE_SYSTEM_PROCESS | FilterAPI.FilterType.FILE_SYSTEM_REGISTRY;
+            GlobalConfig.filterType = FilterAPI.FilterType.CONTROL_FILTER | FilterAPI.FilterType.ENCRYPTION_FILTER
+                | FilterAPI.FilterType.PROCESS_FILTER | FilterAPI.FilterType.REGISTRY_FILTER;
 
             InitializeComponent();
             StartPosition = FormStartPosition.CenterScreen;
@@ -77,6 +78,82 @@ namespace SecureSandbox
             GlobalConfig.Stop();
         }
 
+        void SendSettingsToFilter()
+        {
+            try
+            {
+                filterControl.ClearFilters();
+                foreach (FileFilterRule filterRule in GlobalConfig.FilterRules.Values)
+                {
+                    FileFilter fileFilter = filterRule.ToFileFilter();
+                    fileFilter.OnFilterRequestEncryptKey += encryptEventHandler.OnFilterRequestEncryptKey;
+                    filterControl.AddFilter(fileFilter);
+                }
+
+                foreach (ProcessFilterRule filterRule in GlobalConfig.ProcessFilterRules.Values)
+                {
+                    ProcessFilter processFilter = filterRule.ToProcessFilter();
+                    filterControl.AddFilter(processFilter);
+                }
+
+                foreach (RegistryFilterRule filterRule in GlobalConfig.RegistryFilterRules.Values)
+                {
+                    RegistryFilter registryFilter = filterRule.ToRegistryFilter();
+                    filterControl.AddFilter(registryFilter);
+                }
+
+                string lastError = string.Empty;
+                if (!filterControl.SendConfigSettingsToFilter(ref lastError))
+                {
+                    MessageBox.Show(lastError, "SendConfigSettingsToFilter", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("SendConfigSettingsToFilter exception:" + ex.Message, "SendConfigSettingsToFilter", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void toolStripButton_StartFilter_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                //Purchase a license key with the link: http://www.easefilter.com/Order.htm
+                //Email us to request a trial key: info@easefilter.com //free email is not accepted.        
+                string licenseKey = GlobalConfig.LicenseKey;
+
+                string lastError = string.Empty;
+
+                bool ret = filterControl.StartFilter(GlobalConfig.filterType, GlobalConfig.FilterConnectionThreads, GlobalConfig.ConnectionTimeOut, licenseKey, ref lastError);
+                if (!ret)
+                {
+                    MessageBoxHelper.PrepToCenterMessageBoxOnForm(this);
+                    MessageBox.Show("Start filter failed." + lastError, "StartFilter", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                SendSettingsToFilter();
+
+                toolStripButton_StartFilter.Enabled = false;
+                toolStripButton_Stop.Enabled = true;
+
+                EventManager.WriteMessage(102, "StartFilter", EventLevel.Information, "Start filter service succeeded.");
+            }
+            catch (Exception ex)
+            {
+                EventManager.WriteMessage(104, "StartFilter", EventLevel.Error, "Start filter service failed with error " + ex.Message);
+            }
+        }
+
+        private void toolStripButton_Stop_Click(object sender, EventArgs e)
+        {
+            FilterAPI.ResetConfigData();
+            filterControl.StopFilter();
+
+            toolStripButton_StartFilter.Enabled = true;
+            toolStripButton_Stop.Enabled = false;
+        }
+
         private void SecureSandbox_FormClosed(object sender, FormClosedEventArgs e)
         {
             MessageBoxHelper.PrepToCenterMessageBoxOnForm(this);
@@ -87,8 +164,8 @@ namespace SecureSandbox
             else
             {
                 FilterAPI.ResetConfigData();
-                FilterAPI.StopFilter();
                 GlobalConfig.Stop();
+                filterControl.StopFilter();
                 Application.Exit();
             }
         }
@@ -110,7 +187,7 @@ namespace SecureSandbox
             this.Text += "    Version:  " + version;
         }
 
-        void SetSelectedFilterRule(FilterRule filterRule)
+        void SetSelectedFilterRule(FileFilterRule filterRule)
         {
             selectedFilterRule = filterRule;
             selectedProcessFilterRule = GlobalConfig.GetProcessFilterRule("", selectedFilterRule.IncludeFileFilterMask);
@@ -139,7 +216,7 @@ namespace SecureSandbox
                 listView_Sandbox.Columns.Add("Sandbox Folder", 330, System.Windows.Forms.HorizontalAlignment.Left);
                 listView_Sandbox.Columns.Add("Access Flag", 100, System.Windows.Forms.HorizontalAlignment.Left);
 
-                foreach (FilterRule rule in GlobalConfig.FilterRules.Values)
+                foreach (FileFilterRule rule in GlobalConfig.FilterRules.Values)
                 {
                     string[] itemStr = new string[listView_Sandbox.Columns.Count];
                     itemStr[0] = listView_Sandbox.Items.Count.ToString();
@@ -163,7 +240,7 @@ namespace SecureSandbox
 
         void InitNewFilterRule()
         {
-            selectedFilterRule = new FilterRule();
+            selectedFilterRule = new FileFilterRule();
             selectedProcessFilterRule = new ProcessFilterRule();
             selectedRegistryFilterRule = new RegistryFilterRule();
 
@@ -189,7 +266,7 @@ namespace SecureSandbox
             //by default the sandbox folder doesn't allow being read/write by processes, if the processes want to access the sandbox, it needs to add process rights.
             selectedFilterRule.AccessFlag = (uint)(FilterAPI.ALLOW_MAX_RIGHT_ACCESS|(uint)FilterAPI.AccessFlag.ENABLE_FILE_ENCRYPTION_RULE);
             //Not allow the explorer.exe to read the encrytped files, when you copy the encrypted files from exploer, the file can stay encrypted.
-            selectedFilterRule.ProcessRights = "explorer.exe!" + ((uint)FilterAPI.ALLOW_MAX_RIGHT_ACCESS &~(uint)(FilterAPI.AccessFlag.ALLOW_READ_ENCRYPTED_FILES)).ToString() + ";";
+            selectedFilterRule.ProcessNameRights = "explorer.exe!" + ((uint)FilterAPI.ALLOW_MAX_RIGHT_ACCESS &~(uint)(FilterAPI.AccessFlag.ALLOW_READ_ENCRYPTED_FILES)).ToString() + ";";
         }
 
         private void InitSandbox()
@@ -281,6 +358,8 @@ namespace SecureSandbox
                 {
                     checkBox_EnableEncryption.Checked = false;
                 }
+
+                SendSettingsToFilter();
 
             }
             catch (Exception ex)
@@ -407,8 +486,8 @@ namespace SecureSandbox
 
             selectedProcessFilterRule.ProcessNameFilterMask = textBox_SandboxFolder.Text;          
 
-            ProcessFileAccessRights processFileAccessRigths = new ProcessFileAccessRights(selectedProcessFilterRule);
-            processFileAccessRigths.ShowDialog();
+            ProcessFileAccessRights processFileAccessRights = new ProcessFileAccessRights(selectedProcessFilterRule);
+            processFileAccessRights.ShowDialog();
         }
 
         private void button_ConfigProcessRights_Click(object sender, EventArgs e)
@@ -429,7 +508,7 @@ namespace SecureSandbox
             if (processRights.ShowDialog() == System.Windows.Forms.DialogResult.OK)
             {
                selectedFilterRule = processRights.currentFilterRule;
-               GlobalConfig.AddFilterRule(selectedFilterRule);
+               GlobalConfig.AddFileFilterRule(selectedFilterRule);
                InitListView();
             }
             
@@ -442,7 +521,7 @@ namespace SecureSandbox
                 return;
             }
 
-            SetSelectedFilterRule(((FilterRule)listView_Sandbox.SelectedItems[0].Tag).Copy());
+            SetSelectedFilterRule(((FileFilterRule)listView_Sandbox.SelectedItems[0].Tag).Copy());
           
             InitSandbox();
         }
@@ -466,7 +545,7 @@ namespace SecureSandbox
 
             foreach (System.Windows.Forms.ListViewItem item in listView_Sandbox.SelectedItems)
             {
-                FilterRule filterRule = (FilterRule)item.Tag;
+                FileFilterRule filterRule = (FileFilterRule)item.Tag;
 
                 GlobalConfig.RemoveFilterRule(filterRule.IncludeFileFilterMask);
 
@@ -483,6 +562,8 @@ namespace SecureSandbox
                 }
                 
                 GlobalConfig.SaveConfigSetting();
+
+                SendSettingsToFilter();
             }
 
             if (GlobalConfig.FilterRules.Count > 0)
@@ -577,184 +658,17 @@ namespace SecureSandbox
         {
             if (GetSandboxSetting())
             {
-                GlobalConfig.AddFilterRule(selectedFilterRule);
+                GlobalConfig.AddFileFilterRule(selectedFilterRule);
                 GlobalConfig.AddProcessFilterRule(selectedProcessFilterRule);
                 GlobalConfig.AddRegistryFilterRule(selectedRegistryFilterRule);
                 GlobalConfig.SaveConfigSetting();
+
+                SendSettingsToFilter();
             }
 
             InitListView();
         }
 
-        Boolean FilterCallback(IntPtr sendDataPtr, IntPtr replyDataPtr)
-        {
-            Boolean ret = true;
-
-            try
-            {
-                FilterAPI.MessageSendData messageSend = (FilterAPI.MessageSendData)Marshal.PtrToStructure(sendDataPtr, typeof(FilterAPI.MessageSendData));
-
-                if (FilterAPI.MESSAGE_SEND_VERIFICATION_NUMBER != messageSend.VerificationNumber)
-                {
-                    MessageBoxHelper.PrepToCenterMessageBoxOnForm(this);
-                    MessageBox.Show("Received message corrupted.Please check if the MessageSendData structure is correct.");
-
-                    EventManager.WriteMessage(139, "FilterCallback", EventLevel.Error, "Received message corrupted.Please check if the MessageSendData structure is correct.");
-                    return false;
-                }
-
-                EventManager.WriteMessage(149, "FilterCallback", EventLevel.Verbose, "Received message Id#" + messageSend.MessageId + " type:" + messageSend.MessageType
-                    + " CreateOptions:" + messageSend.CreateOptions.ToString("X") + " infoClass:" + messageSend.InfoClass + " fileName:" + messageSend.FileName);
-
-
-                if (replyDataPtr.ToInt64() != 0)
-                {
-                    FilterAPI.MessageReplyData messageReply = (FilterAPI.MessageReplyData)Marshal.PtrToStructure(replyDataPtr, typeof(FilterAPI.MessageReplyData));
-
-                    if (messageSend.MessageType == (uint)FilterAPI.FilterCommand.FILTER_REQUEST_ENCRYPTION_IV_AND_KEY)
-                    {
-                        //this is encryption filter rule with boolean config "REQUEST_ENCRYPT_KEY_AND_IV_FROM_SERVICE" enabled.                        
-                        //the filter driver request the IV and key to open or create the encrypted file.                        
-
-                        //if you want to deny the file open or creation, you set the value as below:
-                        //messageReply.ReturnStatus = (uint)FilterAPI.NTSTATUS.STATUS_ACCESS_DENIED;
-                        //messageReply.FilterStatus = (uint)FilterAPI.FilterStatus.FILTER_COMPLETE_PRE_OPERATION;
-
-                        EventManager.WriteMessage(200, "filtercallback", EventLevel.Verbose, messageSend.FileName + " FILTER_REQUEST_ENCRYPTION_IV_AND_KEY");
-
-                        //Here we return the test iv and key to the filter driver, you need to replace with you own iv and key in your code.
-                        AESDataBuffer aesData = new AESDataBuffer();
-                        aesData.AccessFlags = FilterAPI.ALLOW_MAX_RIGHT_ACCESS;
-                        aesData.IV = FilterAPI.DEFAULT_IV_TAG;
-                        aesData.IVLength = (uint)aesData.IV.Length;
-                        aesData.EncryptionKey = Utils.GetKeyByPassPhrase(DigitalRightControl.PassPhrase,32);
-                        aesData.EncryptionKeyLength = (uint)aesData.EncryptionKey.Length;
-
-                        byte[] aesDataArray = DigitalRightControl.ConvertAESDataToByteArray(aesData);
-                        messageReply.DataBufferLength = (uint)aesDataArray.Length;
-                        Array.Copy(aesDataArray, messageReply.DataBuffer, aesDataArray.Length);
-
-                        messageReply.ReturnStatus = (uint)FilterAPI.NTSTATUS.STATUS_SUCCESS;
-
-
-                    }
-                    else if (messageSend.MessageType == (uint)FilterAPI.FilterCommand.FILTER_REQUEST_ENCRYPTION_IV_AND_KEY_AND_TAGDATA)
-                    {
-                        //this is encryption filter rule with boolean config "REQUEST_ENCRYPT_KEY_IV_AND_TAGDATA_FROM_SERVICE" enabled.                        
-                        //the filter driver request the IV and key to open or create the encrypted file.                        
-
-                        //if you want to deny the file open or creation, you set the value as below:
-                        //messageReply.ReturnStatus = (uint)FilterAPI.NTSTATUS.STATUS_ACCESS_DENIED;
-                        //messageReply.FilterStatus = (uint)FilterAPI.FilterStatus.FILTER_COMPLETE_PRE_OPERATION;
-
-                        if (messageSend.DataBufferLength > 0)
-                        {
-                            //this is the tag data which attached to the encrypted file .
-                            string tagDataStr = Encoding.Unicode.GetString(messageSend.DataBuffer);
-                            EventManager.WriteMessage(235, "filtercallback", EventLevel.Verbose, "EncryptedFile:" + messageSend.FileName + ",tagData:" + tagDataStr);
-                        }
-
-                        //Here we return the test iv ,key and tag data to the filter driver, you need to replace with you own iv and key in your code.
-                        AESDataBuffer aesData = new AESDataBuffer();
-                        aesData.AccessFlags = FilterAPI.ALLOW_MAX_RIGHT_ACCESS;
-                        aesData.IV = FilterAPI.DEFAULT_IV_TAG;
-                        aesData.IVLength = (uint)aesData.IV.Length;
-                        aesData.EncryptionKey = Utils.GetKeyByPassPhrase(DigitalRightControl.PassPhrase,32);
-                        aesData.EncryptionKeyLength = (uint)aesData.EncryptionKey.Length;
-                        aesData.TagData = Encoding.Unicode.GetBytes("TagData:" + messageSend.FileName);
-                        aesData.TagDataLength = (uint)aesData.TagData.Length;
-
-                        byte[] aesDataArray = DigitalRightControl.ConvertAESDataToByteArray(aesData);
-                        messageReply.DataBufferLength = (uint)aesDataArray.Length;
-                        Array.Copy(aesDataArray, messageReply.DataBuffer, aesDataArray.Length);
-
-                        messageReply.ReturnStatus = (uint)FilterAPI.NTSTATUS.STATUS_SUCCESS;
-
-                    }
-                    else
-                    {
-                        //this is for control filter driver when the pre-IO was registered.
-
-                        //here you can control the IO behaviour and modify the data.
-                        if (!FilterService.AuthorizeFileAccess(messageSend, ref messageReply))
-                        {
-                            //to comple the PRE_IO
-                            messageReply.ReturnStatus = (uint)FilterAPI.NTSTATUS.STATUS_ACCESS_DENIED;
-                            messageReply.FilterStatus = (uint)FilterAPI.FilterStatus.FILTER_COMPLETE_PRE_OPERATION;
-
-                            EventManager.WriteMessage(160, "FilterCallback", EventLevel.Error, "Return error for I/O request:" + ((FilterAPI.MessageType)messageSend.MessageType).ToString() +
-                                ",fileName:" + messageSend.FileName);
-                        }
-                        else
-                        {
-
-                            messageReply.MessageId = messageSend.MessageId;
-                            messageReply.MessageType = messageSend.MessageType;
-                            messageReply.ReturnStatus = (uint)FilterAPI.NTSTATUS.STATUS_SUCCESS;
-
-                        }
-
-                    }
-
-                    Marshal.StructureToPtr(messageReply, replyDataPtr, true);
-                }
-
-                return ret;
-            }
-            catch (Exception ex)
-            {
-                EventManager.WriteMessage(134, "FilterCallback", EventLevel.Error, "filter callback exception." + ex.Message);
-                return false;
-            }
-
-        }
-
-        void DisconnectCallback()
-        {
-            EventManager.WriteMessage(190, "DisconnectCallback", EventLevel.Information, "Filter Disconnected." + FilterAPI.GetLastErrorMessage());
-        }
-     
-
-        private void toolStripButton_StartFilter_Click(object sender, EventArgs e)
-        {
-            try
-            {
-                string lastError = string.Empty;
-
-                bool ret = FilterAPI.StartFilter((int)GlobalConfig.FilterConnectionThreads
-                                            , registerKey
-                                            , new FilterAPI.FilterDelegate(FilterCallback)
-                                            , new FilterAPI.DisconnectDelegate(DisconnectCallback)
-                                            , ref lastError);
-                if (!ret)
-                {
-                    MessageBoxHelper.PrepToCenterMessageBoxOnForm(this);
-                    MessageBox.Show("Start filter failed." + lastError);
-                    return;
-                }
-
-                toolStripButton_StartFilter.Enabled = false;
-                toolStripButton_Stop.Enabled = true;
-
-
-                GlobalConfig.SendConfigSettingsToFilter();
-
-                EventManager.WriteMessage(102, "StartFilter", EventLevel.Information, "Start filter service succeeded.");
-            }
-            catch (Exception ex)
-            {
-                EventManager.WriteMessage(104, "StartFilter", EventLevel.Error, "Start filter service failed with error " + ex.Message);
-            }
-        }
-
-        private void toolStripButton_Stop_Click(object sender, EventArgs e)
-        {
-            FilterAPI.ResetConfigData();
-            FilterAPI.StopFilter();
-
-            toolStripButton_StartFilter.Enabled = true;
-            toolStripButton_Stop.Enabled = false;
-        }
 
         private void toolStripButton_EventViewer_Click(object sender, EventArgs e)
         {
@@ -776,6 +690,11 @@ namespace SecureSandbox
 
             MessageBoxHelper.PrepToCenterMessageBoxOnForm(this);
             MessageBox.Show(information, "How to use sandbox?", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void toolStripButton_ApplyTrialKey_Click(object sender, EventArgs e)
+        {
+            
         }
             
     }

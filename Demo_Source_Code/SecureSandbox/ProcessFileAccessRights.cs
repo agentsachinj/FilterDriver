@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Windows.Forms;
 
+using EaseFilter.FilterControl;
 using EaseFilter.CommonObjects;
 
 namespace SecureSandbox

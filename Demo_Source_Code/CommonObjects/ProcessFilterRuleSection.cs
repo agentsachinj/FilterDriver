@@ -21,6 +21,8 @@ using System.Linq;
 using System.Text;
 using System.Configuration;
 
+using EaseFilter.FilterControl;
+
 namespace EaseFilter.CommonObjects
 {
     public class ProcessFilterRuleSection : ConfigurationSection
@@ -98,7 +100,7 @@ namespace EaseFilter.CommonObjects
         }
 
         /// <summary>
-        /// the list of the process Id, serperated with ';', i.e. "123;234;"
+        /// The process Id here is to control the file access.
         /// </summary>
         [ConfigurationProperty("processId",IsRequired = false)]
         public string ProcessId
@@ -128,16 +130,6 @@ namespace EaseFilter.CommonObjects
             set { base["controlFlag"] = value; }
         }
 
-        /// <summary>
-        /// the filter rule Id
-        /// </summary>
-        [ConfigurationProperty("id", IsRequired = false)]
-        public uint Id
-        {
-            get { return (uint)base["id"]; }
-            set { base["id"] = value; }
-        }
-
         public ProcessFilterRule Copy()
         {
             ProcessFilterRule dest = new ProcessFilterRule();
@@ -145,9 +137,43 @@ namespace EaseFilter.CommonObjects
             dest.ProcessNameFilterMask = ProcessNameFilterMask;
             dest.FileAccessRights = FileAccessRights;
             dest.ControlFlag = ControlFlag;
-            dest.Id = Id;
 
             return dest;
+        }
+
+        public ProcessFilter ToProcessFilter()
+        {
+            ProcessFilter processFilter = new ProcessFilter(ProcessNameFilterMask);
+
+            processFilter.FilterType = FilterAPI.FilterType.PROCESS_FILTER;
+
+            if (ProcessId.Trim().Length > 0)
+            {
+                processFilter.ProcessId = uint.Parse(ProcessId);
+            }
+            else
+            {
+                processFilter.ProcessId = 0;
+            }
+
+            processFilter.ProcessNameFilterMask = ProcessNameFilterMask;      
+            processFilter.ControlFlag = ControlFlag;
+
+            string[] fileAccessRights = FileAccessRights.Split(new char[] { ';' });
+            if (fileAccessRights.Length > 0)
+            {
+                foreach (string fileAccessRight in fileAccessRights)
+                {
+                    if (fileAccessRight.Trim().Length > 0)
+                    {
+                        string fileNamFilterMask = fileAccessRight.Substring(0, fileAccessRight.IndexOf('!'));
+                        uint accessFlags = uint.Parse(fileAccessRight.Substring(fileAccessRight.IndexOf('!') + 1));
+                        processFilter.FileAccessRights.Add(fileNamFilterMask, accessFlags);
+                    }
+                }
+            }
+
+            return processFilter;
         }
 
     }

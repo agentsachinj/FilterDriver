@@ -21,6 +21,8 @@ using System.Configuration;
 using System.Collections;
 using System.Collections.Generic;
 
+using EaseFilter.FilterControl;
+
 namespace EaseFilter.CommonObjects
 {
 
@@ -74,11 +76,11 @@ namespace EaseFilter.CommonObjects
             config.Save(ConfigurationSaveMode.Full);
         }
 
-        public static Dictionary<string, FilterRule> GetFilterRules()
+        public static Dictionary<string, FileFilterRule> GetFilterRules()
         {
-            Dictionary<string, FilterRule> filterRules = new Dictionary<string, FilterRule>();
+            Dictionary<string, FileFilterRule> filterRules = new Dictionary<string, FileFilterRule>();
 
-            foreach (FilterRule filterRule in filterRuleSection.Instances)
+            foreach (FileFilterRule filterRule in filterRuleSection.Instances)
             {
                 filterRules.Add(filterRule.IncludeFileFilterMask, filterRule);
             }
@@ -86,7 +88,7 @@ namespace EaseFilter.CommonObjects
             return filterRules;
         }
 
-        public static void AddFilterRule(FilterRule filterRule)
+        public static void AddFilterRule(FileFilterRule filterRule)
         {
 
             filterRuleSection.Instances.Add(filterRule);

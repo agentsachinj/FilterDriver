@@ -25,6 +25,7 @@ using System.Text;
 using System.Windows.Forms;
 using System.IO;
 
+using EaseFilter.FilterControl;
 using EaseFilter.CommonObjects;
 
 namespace AutoFileCryptTool
@@ -36,10 +37,8 @@ namespace AutoFileCryptTool
         public TrayForm()
         {
               
-            InitializeComponent();
-            Utils.CopyOSPlatformDependentFiles();
-    
-            this.Hide();
+           InitializeComponent();            
+           this.Hide();
 
             fileCryptForm = new Form_FileCrypt();
             

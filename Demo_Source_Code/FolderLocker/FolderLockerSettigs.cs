@@ -24,20 +24,21 @@ using System.Linq;
 using System.Text;
 using System.Windows.Forms;
 
+using EaseFilter.FilterControl;
 using EaseFilter.CommonObjects;
 
 namespace EaseFilter.FolderLocker
 {
     public partial class FolderLockerSettigs : Form
     {
-        public FilterRule filterRule = new FilterRule();
+        public FileFilterRule filterRule = new FileFilterRule();
 
         uint accessFlags = FilterAPI.ALLOW_MAX_RIGHT_ACCESS;
         Dictionary<string, uint> userList = new Dictionary<string, uint>();
         Dictionary<string, uint> processList = new Dictionary<string, uint>();
         bool isFormInitialized = false;
 
-        public FolderLockerSettigs(FilterRule _filterRule)
+        public FolderLockerSettigs(FileFilterRule _filterRule)
         {
             InitializeComponent();
 
@@ -56,7 +57,6 @@ namespace EaseFilter.FolderLocker
             }
             else
             {
-                filterRule.Id = GlobalConfig.GetFilterRuleId();
                 textBox_FolderName.Enabled = true;
                 button_BrowseFolder.Enabled = true;
             }
@@ -72,7 +72,7 @@ namespace EaseFilter.FolderLocker
 
         private void InitAccessList()
         {
-            string[] processRights = filterRule.ProcessRights.Split(new char[] { ';' });
+            string[] processRights = filterRule.ProcessNameRights.Split(new char[] { ';' });
             if (processRights.Length > 0)
             {
                 foreach (string processRight in processRights)
@@ -204,6 +204,15 @@ namespace EaseFilter.FolderLocker
                 checkBox_AllowDelete.Checked = false;
             }
 
+            if ((accessFlags & (uint)FilterAPI.AccessFlag.ALLOW_SET_SECURITY_ACCESS) > 0)
+            {
+                checkBox_AllowSetSecurity.Checked = true;
+            }
+            else
+            {
+                checkBox_AllowSetSecurity.Checked = false;
+            }
+
             if ((accessFlags & (uint)FilterAPI.AccessFlag.ALLOW_FILE_RENAME) > 0)
             {
                 checkBox_AllowRename.Checked = true;
@@ -230,25 +239,6 @@ namespace EaseFilter.FolderLocker
             {
                 checkBox_AllowNewFileCreation.Checked = false;
             }
-
-            if ((accessFlags & (uint)FilterAPI.AccessFlag.ALLOW_FILE_MEMORY_MAPPED) > 0)
-            {
-                checkBox_AllowExecution.Checked = true;
-            }
-            else
-            {
-                checkBox_AllowExecution.Checked = false;
-            }
-
-            if ((accessFlags & (uint)FilterAPI.AccessFlag.ALLOW_SET_SECURITY_ACCESS) > 0)
-            {
-                checkBox_AllowSetSecurity.Checked = true;
-            }
-            else
-            {
-                checkBox_AllowSetSecurity.Checked = false;
-            }
-
 
             if ((accessFlags & (uint)FilterAPI.AccessFlag.ENABLE_HIDE_FILES_IN_DIRECTORY_BROWSING) > 0)
             {
@@ -320,13 +310,13 @@ namespace EaseFilter.FolderLocker
 
             if (processList.Count == 0)
             {
-                filterRule.ProcessRights = "";
+                filterRule.ProcessNameRights = "";
             }
             else
             {
                 foreach (KeyValuePair<string, uint> entry in processList)
                 {
-                    filterRule.ProcessRights = entry.Key + "!" + entry.Value + ";";
+                    filterRule.ProcessNameRights = entry.Key + "!" + entry.Value + ";";
                 }
             }          
             
@@ -396,19 +386,6 @@ namespace EaseFilter.FolderLocker
             else
             {
                 accessFlags = accessFlags | ((uint)FilterAPI.AccessFlag.ALLOW_OPEN_WITH_CREATE_OR_OVERWRITE_ACCESS);
-            }
-
-        }
-
-        private void checkBox_AllowExecution_CheckedChanged(object sender, EventArgs e)
-        {
-            if (!checkBox_AllowExecution.Checked)
-            {
-                accessFlags = accessFlags & ((uint)~FilterAPI.AccessFlag.ALLOW_FILE_MEMORY_MAPPED);
-            }
-            else
-            {
-                accessFlags = accessFlags | ((uint)FilterAPI.AccessFlag.ALLOW_FILE_MEMORY_MAPPED);
             }
 
         }
@@ -493,7 +470,8 @@ namespace EaseFilter.FolderLocker
 
         private void button_AddUserRights_Click_1(object sender, EventArgs e)
         {
-             Form_AccessRights accessRightsForm = new Form_AccessRights(false,FilterAPI.ALLOW_MAX_RIGHT_ACCESS,"domain\\username");
+            string defaultUserName = Environment.UserDomainName + "\\" + Environment.UserName;
+            Form_AccessRights accessRightsForm = new Form_AccessRights(false, FilterAPI.ALLOW_MAX_RIGHT_ACCESS, defaultUserName);
 
             if (accessRightsForm.ShowDialog() == System.Windows.Forms.DialogResult.OK)
             {
@@ -563,6 +541,11 @@ namespace EaseFilter.FolderLocker
             {
                 textBox_FolderName.Text = browseFolder.SelectedPath;
             }
+        }
+
+        private void FolderLockerSettigs_Load(object sender, EventArgs e)
+        {
+
         }
                
     }

@@ -1,7 +1,47 @@
-﻿namespace FileProtector
+﻿using System;
+using System.Windows.Forms;
+using System.IO;
+using System.Threading;
+using System.Runtime.InteropServices;
+
+using EaseFilter.CommonObjects;
+
+namespace FileProtector
 {
+    public class FastListView : ListView
+    {
+        [StructLayout(LayoutKind.Sequential)]
+        private struct NMHDR
+        {
+            public IntPtr hwndFrom;
+            public uint idFrom;
+            public uint code;
+        }
+
+        private const uint NM_CUSTOMDRAW = unchecked((uint)-12);
+
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == 0x204E)
+            {
+                NMHDR hdr = (NMHDR)m.GetLParam(typeof(NMHDR));
+                if (hdr.code == NM_CUSTOMDRAW)
+                {
+                    m.Result = (IntPtr)0;
+                    return;
+                }
+            }
+
+            base.WndProc(ref m);
+        }
+    }
+
     partial class ProtectorForm
     {
+        [DllImport("user32")]
+        private static extern bool SendMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
+        private uint LVM_SETTEXTBKCOLOR = 0x1026;
+
         /// <summary>
         /// Required designer variable.
         /// </summary>
@@ -34,6 +74,7 @@
             this.toolsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.encryptFileWithToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.decryptFileToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.decryptFileWithOffsetToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.getEncryptedFileIVTagToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.exitToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStrip1 = new System.Windows.Forms.ToolStrip();
@@ -47,9 +88,8 @@
             this.toolStripSeparator4 = new System.Windows.Forms.ToolStripSeparator();
             this.toolStripButton1 = new System.Windows.Forms.ToolStripButton();
             this.toolStripButton_UnitTest = new System.Windows.Forms.ToolStripButton();
-            this.toolStripButton_TestTool = new System.Windows.Forms.ToolStripButton();
-            this.listView_Info = new System.Windows.Forms.ListView();
             this.toolStripButton_Help = new System.Windows.Forms.ToolStripButton();
+            this.listView_Info = new FileProtector.FastListView();
             this.menuStrip1.SuspendLayout();
             this.toolStrip1.SuspendLayout();
             this.SuspendLayout();
@@ -78,36 +118,44 @@
             this.toolsToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.encryptFileWithToolStripMenuItem,
             this.decryptFileToolStripMenuItem,
+            this.decryptFileWithOffsetToolStripMenuItem,
             this.getEncryptedFileIVTagToolStripMenuItem});
             this.toolsToolStripMenuItem.Name = "toolsToolStripMenuItem";
-            this.toolsToolStripMenuItem.Size = new System.Drawing.Size(47, 20);
+            this.toolsToolStripMenuItem.Size = new System.Drawing.Size(46, 20);
             this.toolsToolStripMenuItem.Text = "Tools";
             // 
             // encryptFileWithToolStripMenuItem
             // 
             this.encryptFileWithToolStripMenuItem.Name = "encryptFileWithToolStripMenuItem";
-            this.encryptFileWithToolStripMenuItem.Size = new System.Drawing.Size(193, 22);
+            this.encryptFileWithToolStripMenuItem.Size = new System.Drawing.Size(222, 22);
             this.encryptFileWithToolStripMenuItem.Text = "Encrypt file with API";
             this.encryptFileWithToolStripMenuItem.Click += new System.EventHandler(this.encryptFileWithToolStripMenuItem_Click);
             // 
             // decryptFileToolStripMenuItem
             // 
             this.decryptFileToolStripMenuItem.Name = "decryptFileToolStripMenuItem";
-            this.decryptFileToolStripMenuItem.Size = new System.Drawing.Size(193, 22);
+            this.decryptFileToolStripMenuItem.Size = new System.Drawing.Size(222, 22);
             this.decryptFileToolStripMenuItem.Text = "Decrypt file with API";
             this.decryptFileToolStripMenuItem.Click += new System.EventHandler(this.decryptFileToolStripMenuItem_Click);
+            // 
+            // decryptFileWithOffsetToolStripMenuItem
+            // 
+            this.decryptFileWithOffsetToolStripMenuItem.Name = "decryptFileWithOffsetToolStripMenuItem";
+            this.decryptFileWithOffsetToolStripMenuItem.Size = new System.Drawing.Size(222, 22);
+            this.decryptFileWithOffsetToolStripMenuItem.Text = "Decrypt file with offset";
+            this.decryptFileWithOffsetToolStripMenuItem.Click += new System.EventHandler(this.decryptFileWithOffsetToolStripMenuItem_Click);
             // 
             // getEncryptedFileIVTagToolStripMenuItem
             // 
             this.getEncryptedFileIVTagToolStripMenuItem.Name = "getEncryptedFileIVTagToolStripMenuItem";
-            this.getEncryptedFileIVTagToolStripMenuItem.Size = new System.Drawing.Size(193, 22);
-            this.getEncryptedFileIVTagToolStripMenuItem.Text = "Check Encrypt File Tag";
-            this.getEncryptedFileIVTagToolStripMenuItem.Click += new System.EventHandler(this.getEncryptedFileIVTagToolStripMenuItem_Click);
+            this.getEncryptedFileIVTagToolStripMenuItem.Size = new System.Drawing.Size(222, 22);
+            this.getEncryptedFileIVTagToolStripMenuItem.Text = "Check Encrypt File Tag Data ";
+            this.getEncryptedFileIVTagToolStripMenuItem.Click += new System.EventHandler(this.getEncryptedFileTagdataToolStripMenuItem_Click);
             // 
             // exitToolStripMenuItem
             // 
             this.exitToolStripMenuItem.Name = "exitToolStripMenuItem";
-            this.exitToolStripMenuItem.Size = new System.Drawing.Size(37, 20);
+            this.exitToolStripMenuItem.Size = new System.Drawing.Size(38, 20);
             this.exitToolStripMenuItem.Text = "Exit";
             this.exitToolStripMenuItem.Click += new System.EventHandler(this.exitToolStripMenuItem_Click);
             // 
@@ -124,7 +172,6 @@
             this.toolStripSeparator4,
             this.toolStripButton1,
             this.toolStripButton_UnitTest,
-            this.toolStripButton_TestTool,
             this.toolStripButton_Help});
             this.toolStrip1.Location = new System.Drawing.Point(0, 24);
             this.toolStrip1.Name = "toolStrip1";
@@ -195,30 +242,31 @@
             this.toolStripButton1.Name = "toolStripButton1";
             this.toolStripButton1.Size = new System.Drawing.Size(93, 22);
             this.toolStripButton1.Text = "Event viewer";
-            this.toolStripButton1.Click += new System.EventHandler(this.toolStripButton1_Click);
+            this.toolStripButton1.Click += new System.EventHandler(this.toolStripDisplayEvent_Click);
             // 
             // toolStripButton_UnitTest
             // 
             this.toolStripButton_UnitTest.Image = ((System.Drawing.Image)(resources.GetObject("toolStripButton_UnitTest.Image")));
             this.toolStripButton_UnitTest.ImageTransparentColor = System.Drawing.Color.Magenta;
             this.toolStripButton_UnitTest.Name = "toolStripButton_UnitTest";
-            this.toolStripButton_UnitTest.Size = new System.Drawing.Size(125, 22);
+            this.toolStripButton_UnitTest.Size = new System.Drawing.Size(124, 22);
             this.toolStripButton_UnitTest.Text = "Protector Unit Test";
             this.toolStripButton_UnitTest.Click += new System.EventHandler(this.toolStripButton_UnitTest_Click);
             // 
-            // toolStripButton_TestTool
+            // toolStripButton_Help
             // 
-            this.toolStripButton_TestTool.Image = ((System.Drawing.Image)(resources.GetObject("toolStripButton_TestTool.Image")));
-            this.toolStripButton_TestTool.ImageTransparentColor = System.Drawing.Color.Magenta;
-            this.toolStripButton_TestTool.Name = "toolStripButton_TestTool";
-            this.toolStripButton_TestTool.Size = new System.Drawing.Size(110, 22);
-            this.toolStripButton_TestTool.Text = "File IO Test Tool";
-            this.toolStripButton_TestTool.Click += new System.EventHandler(this.toolStripButton_TestTool_Click);
+            this.toolStripButton_Help.Image = ((System.Drawing.Image)(resources.GetObject("toolStripButton_Help.Image")));
+            this.toolStripButton_Help.ImageTransparentColor = System.Drawing.Color.Magenta;
+            this.toolStripButton_Help.Name = "toolStripButton_Help";
+            this.toolStripButton_Help.Size = new System.Drawing.Size(52, 22);
+            this.toolStripButton_Help.Text = "Help";
+            this.toolStripButton_Help.Click += new System.EventHandler(this.toolStripButton_Help_Click);
             // 
             // listView_Info
             // 
             this.listView_Info.Dock = System.Windows.Forms.DockStyle.Fill;
             this.listView_Info.FullRowSelect = true;
+            this.listView_Info.HideSelection = false;
             this.listView_Info.HoverSelection = true;
             this.listView_Info.LabelEdit = true;
             this.listView_Info.Location = new System.Drawing.Point(0, 49);
@@ -228,15 +276,6 @@
             this.listView_Info.TabIndex = 2;
             this.listView_Info.UseCompatibleStateImageBehavior = false;
             this.listView_Info.View = System.Windows.Forms.View.Details;
-            // 
-            // toolStripButton_Help
-            // 
-            this.toolStripButton_Help.Image = ((System.Drawing.Image)(resources.GetObject("toolStripButton_Help.Image")));
-            this.toolStripButton_Help.ImageTransparentColor = System.Drawing.Color.Magenta;
-            this.toolStripButton_Help.Name = "toolStripButton_Help";
-            this.toolStripButton_Help.Size = new System.Drawing.Size(129, 22);
-            this.toolStripButton_Help.Text = "Programming Help";
-            this.toolStripButton_Help.Click += new System.EventHandler(this.toolStripButton_Help_Click);
             // 
             // ProtectorForm
             // 
@@ -267,7 +306,7 @@
         private System.Windows.Forms.ToolStripButton toolStripButton_StartFilter;
         private System.Windows.Forms.ToolStripButton toolStripButton_Stop;
         private System.Windows.Forms.ToolStripButton toolStripButton_ClearMessage;
-        private System.Windows.Forms.ListView listView_Info;
+        private FastListView listView_Info;
         private System.Windows.Forms.ToolStripMenuItem optionsToolStripMenuItem;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator1;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator2;
@@ -281,8 +320,8 @@
         private System.Windows.Forms.ToolStripButton toolStripButton_LoadMessage;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator4;
         private System.Windows.Forms.ToolStripButton toolStripButton_UnitTest;
-        private System.Windows.Forms.ToolStripButton toolStripButton_TestTool;
         private System.Windows.Forms.ToolStripButton toolStripButton_Help;
+        private ToolStripMenuItem decryptFileWithOffsetToolStripMenuItem;
     }
 }
 

@@ -25,20 +25,23 @@ using System.Windows.Forms;
 using System.Diagnostics;
 using System.Globalization;
 
+using EaseFilter.FilterControl;
+
 namespace EaseFilter.CommonObjects
 {
     public partial class OptionForm : Form
     {
-        OptionType optionType = OptionType.Register_Request;
+        OptionType optionType = OptionType.MonitorFileIOEvents;
         string value = string.Empty;
 
-        uint requestRegistration = 0;
+        uint monitorFileEvents = 0;
+        ulong monitorIOEvents = 0;
+        ulong controlIOEvents = 0;
         string processId = "0";
         uint accessFlags = 0;
         uint debugModules = 0xffff;
         uint filterStatus = 0;
         uint returnStatus = 0;
-        uint eventNotification = 0;
         uint registryAccessFlags = 0;
         ulong registryCallbackClass = 0;
         byte filterType = 0;
@@ -51,12 +54,13 @@ namespace EaseFilter.CommonObjects
 
         public enum OptionType
         {
-            Register_Request = 0,
+            MonitorFileEvents = 0,
+            MonitorFileIOEvents,
+            ControlFileIOEvents,
             ProccessId,
             Access_Flag,
             Filter_Status,
-            Return_Status,
-            EventNotification,
+            Return_Status,            
             ShareFileAccessFlag,
             RegistryAccessFlag,
             RegistryCallbackClass,
@@ -111,9 +115,9 @@ namespace EaseFilter.CommonObjects
             get { return filterType; }
         }
 
-        public uint EventNotification
+        public uint MonitorFileEvents
         {
-            get { return eventNotification; }
+            get { return monitorFileEvents; }
         }
 
         public uint FilterStatus
@@ -125,9 +129,14 @@ namespace EaseFilter.CommonObjects
             get { return returnStatus; }
         }
 
-        public uint RequestRegistration
+        public ulong MonitorIOEvents
         {
-            get { return requestRegistration; }
+            get { return monitorIOEvents; }
+        }
+
+        public ulong ControlIOEvents
+        {
+            get { return controlIOEvents; }
         }
 
         public string ProcessId
@@ -163,28 +172,23 @@ namespace EaseFilter.CommonObjects
 
             switch (optionType)
             {
-                case OptionType.EventNotification:
+                case OptionType.MonitorFileEvents:
                     {
-                        listView1.Clear();		//clear control
+                        listView1.Clear();	
                         //create column header for ListView
-                        listView1.Columns.Add("Select file event type", 200, System.Windows.Forms.HorizontalAlignment.Left);
+                        listView1.Columns.Add("Select monitor file event type", 200, System.Windows.Forms.HorizontalAlignment.Left);
 
-                        eventNotification = uint.Parse(value);
+                        monitorFileEvents = uint.Parse(value);
 
-                        foreach (FilterAPI.EVENTTYPE eventType in Enum.GetValues(typeof(FilterAPI.EVENTTYPE)))
+                        foreach (FilterAPI.FileChangedEvents monitorFileEvent in Enum.GetValues(typeof(FilterAPI.FileChangedEvents)))
                         {
 
-                            if (eventType == FilterAPI.EVENTTYPE.NONE)
-                            {
-                                continue;
-                            }
-
-                            string item = eventType.ToString();
+                            string item = monitorFileEvent.ToString();
 
                             ListViewItem lvItem = new ListViewItem(item, 0);
-                            lvItem.Tag = eventType;
+                            lvItem.Tag = (uint)monitorFileEvent;
 
-                            if ((eventNotification & (uint)eventType) > 0)
+                            if ((monitorFileEvents & (uint)monitorFileEvent) > 0)
                             {
                                 lvItem.Checked = true;
                             }
@@ -195,28 +199,47 @@ namespace EaseFilter.CommonObjects
                         break;
                     }
 
-                case OptionType.Register_Request:
+                case OptionType.MonitorFileIOEvents:
                     {
                         listView1.Clear();		//clear control
                         //create column header for ListView
-                        listView1.Columns.Add("Select Register I/O type", 400, System.Windows.Forms.HorizontalAlignment.Left);
+                        listView1.Columns.Add("Select monitor I/O events", 400, System.Windows.Forms.HorizontalAlignment.Left);
 
-                        requestRegistration = uint.Parse(value);
+                        monitorIOEvents = ulong.Parse(value);
 
-                        foreach (FilterAPI.MessageType messageType in Enum.GetValues(typeof(FilterAPI.MessageType)))
+                        foreach (MonitorFileIOEvents monitorFileIOevent in Enum.GetValues(typeof(MonitorFileIOEvents)))
                         {
-                            string item = messageType.ToString();
+                            string item = monitorFileIOevent.ToString();
+                            
+                            ListViewItem lvItem = new ListViewItem(item, 0);
+                            lvItem.Tag = (ulong)monitorFileIOevent;
 
-                            if (item.ToLower().StartsWith("pre") && isMonitorFilter)
+                            if ((monitorIOEvents & (ulong)monitorFileIOevent) > 0)
                             {
-                                //for monitor filter driver, there are only POST IO can be registered.
-                                continue;
+                                lvItem.Checked = true;
                             }
 
-                            ListViewItem lvItem = new ListViewItem(item, 0);
-                            lvItem.Tag = messageType;
+                            listView1.Items.Add(lvItem);
+                        }
 
-                            if ((requestRegistration & (uint)messageType) > 0)
+                        break;
+                    }
+                case OptionType.ControlFileIOEvents:
+                    {
+                        listView1.Clear();		//clear control
+                        //create column header for ListView
+                        listView1.Columns.Add("Select control I/O events", 400, System.Windows.Forms.HorizontalAlignment.Left);
+
+                        controlIOEvents = ulong.Parse(value);
+
+                        foreach (ControlFileIOEvents controlFileIOevent in Enum.GetValues(typeof(ControlFileIOEvents)))
+                        {
+                            string item = controlFileIOevent.ToString();
+
+                            ListViewItem lvItem = new ListViewItem(item, 0);
+                            lvItem.Tag = (ulong)controlFileIOevent;
+
+                            if ((controlIOEvents & (ulong)controlFileIOevent) > 0)
                             {
                                 lvItem.Checked = true;
                             }
@@ -320,7 +343,27 @@ namespace EaseFilter.CommonObjects
                                 lvItem.Checked = true;
                             }
 
-                            listView1.Items.Add(lvItem);
+                            if (i > 0 )
+                            {
+                                for (int k = 0; k < i; k++)
+                                {
+                                    if ((int)listView1.Items[k].Tag > processlist[i].Id)
+                                    {
+                                        listView1.Items.Insert(k, lvItem);
+                                        break;
+                                    }
+                                }
+
+                                if (listView1.Items.Count == i )
+                                {
+                                    listView1.Items.Insert(i, lvItem);
+                                }
+                                
+                            }
+                            else
+                            {
+                                listView1.Items.Insert(i, lvItem);
+                            }
 
                         }
 
@@ -337,7 +380,7 @@ namespace EaseFilter.CommonObjects
 
                         foreach (FilterAPI.AccessFlag accessFlag in Enum.GetValues(typeof(FilterAPI.AccessFlag)))
                         {
-                            if (accessFlag <= FilterAPI.AccessFlag.ENABLE_REPARSE_FILE_OPEN || accessFlag == FilterAPI.AccessFlag.LEAST_ACCESS_FLAG)
+                            if (accessFlag <= FilterAPI.AccessFlag.EXCLUDE_FILE_ACCESS || accessFlag == FilterAPI.AccessFlag.LEAST_ACCESS_FLAG)
                             {
                                 //this is special usage for the filter 
                                 continue;
@@ -572,26 +615,33 @@ namespace EaseFilter.CommonObjects
 
         private void button_Ok_Click(object sender, EventArgs e)
         {
-            requestRegistration = 0;
+            monitorFileEvents = 0;
+            monitorIOEvents = 0;
+            controlIOEvents = 0;
+
             processId = string.Empty;
             accessFlags = 0;
-            debugModules = 0;
-            eventNotification = 0;
+            debugModules = 0;            
             registryAccessFlags = 0;
             registryCallbackClass = 0;
             filterType = 0;
             processControlFlag = 0;
+            filterDesiredAccess = 0;
+            filterDisposition = 0;
+            filterCreateOptions = 0;
 
             foreach (ListViewItem item in listView1.CheckedItems)
             {
                 switch (optionType)
                 {
-                    case OptionType.EventNotification:
-                        eventNotification |= (uint)item.Tag;
+                    case OptionType.MonitorFileEvents:
+                        monitorFileEvents |= (uint)item.Tag;
                         break;
-
-                    case OptionType.Register_Request:
-                        requestRegistration |= (uint)item.Tag;
+                    case OptionType.MonitorFileIOEvents:
+                        monitorIOEvents |= (ulong)item.Tag;
+                        break;
+                    case OptionType.ControlFileIOEvents:
+                        controlIOEvents |= (ulong)item.Tag;
                         break;
                     case OptionType.ProccessId:
                         int pid = (int)item.Tag;

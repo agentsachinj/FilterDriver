@@ -24,6 +24,7 @@ using System.IO;
 using System.Reflection;
 using System.Configuration.Install;
 
+using EaseFilter.FilterControl;
 using EaseFilter.CommonObjects;
 
 namespace EaseFltCSConsoleDemo
@@ -35,21 +36,14 @@ namespace EaseFltCSConsoleDemo
         /// </summary>
         static void Main(string[] args)
         {
-            bool mutexCreated = false;
-            System.Threading.Mutex mutex = new System.Threading.Mutex(true, "EaseFilter", out mutexCreated);
 
             try
             {
-                if (!mutexCreated)
-                {
-                    Console.WriteLine("There are another EaseFilter service instance running, can't start the second one.");
-                    return;
-                }
+                string lastError = string.Empty;
+                GlobalConfig.filterType = FilterAPI.FilterType.REGISTRY_FILTER | FilterAPI.FilterType.PROCESS_FILTER | FilterAPI.FilterType.CONTROL_FILTER | FilterAPI.FilterType.MONITOR_FILTER;
 
                 if (Environment.UserInteractive)
                 {
-                  
-
                     if (args.Length > 0)
                     {
                         string command = args[0];
@@ -69,7 +63,7 @@ namespace EaseFltCSConsoleDemo
 
                             case "-uninstalldriver":
                                 {
-                                    FilterAPI.StopFilter();
+                                    FilterWorker.StopService();
                                   
                                     bool ret = FilterAPI.UnInstallDriver();
 
@@ -113,15 +107,21 @@ namespace EaseFltCSConsoleDemo
                                 {
                                     try
                                     {
-                                        Console.WriteLine("Starting EaseTag console application...");
-                                        FilterWorker.StartService();
+                                        Console.WriteLine("Starting EaseFilter console application, the filter rule will be loaded from the config file EaseFltCSConsoleDemo.exe.config.");
+                                     
+                                        if(!FilterWorker.StartService(out lastError))
+                                        {
+                                            Console.WriteLine("\n\nStart service failed." + lastError);
+                                            return;
+                                        }
+
                                         Console.WriteLine("\n\nPress any key to stop program");
                                         Console.Read();
                                         FilterWorker.StopService();
                                     }
                                     catch (Exception ex)
                                     {
-                                        Console.WriteLine("Start EaseTag service failed:" + ex.Message);
+                                        Console.WriteLine("Start EaseFilter service failed:" + ex.Message);
                                     }
 
                                     break;
@@ -154,7 +154,6 @@ namespace EaseFltCSConsoleDemo
             {
                 Console.WriteLine("Exiting EaseFilter service.");
                 GlobalConfig.Stop();
-                mutex.Close();
             }
 
 

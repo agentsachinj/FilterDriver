@@ -30,23 +30,10 @@ namespace EaseFilter.FolderLocker
         [STAThread]
         static void Main()
         {
-
-            bool mutexCreated = false;
-            System.Threading.Mutex mutex = new System.Threading.Mutex(true, "EaseFilter", out mutexCreated);
-
-            if (!mutexCreated)
-            {
-                MessageBox.Show("FilterAPI was loaded by another process, start application failed.", "Start", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                mutex.Close();
-                return;
-            }
-
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new TrayForm());
+            Application.Run(new Form_FolderLocker());
 
-
-            mutex.Close();
         }
     }
 }

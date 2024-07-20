@@ -24,6 +24,8 @@ using System.Linq;
 using System.Text;
 using System.Windows.Forms;
 
+using EaseFilter.FilterControl;
+
 namespace EaseFilter.CommonObjects
 {
     public partial class SettingsForm : Form
@@ -32,32 +34,40 @@ namespace EaseFilter.CommonObjects
         {
             InitializeComponent();
             InitOptionForm();
+
+            string computerId = FilterAPI.GetComputerId().ToString();
+
+            this.Text += "    ComputerId:" + computerId;
         }
 
         private void InitOptionForm()
         {
             try
             {
-                comboBox_EventLevel.Items.Clear();
-
-                //General infomation
-                foreach (EventLevel item in Enum.GetValues(typeof(EventLevel)))
+                if (GlobalConfig.filterType == FilterAPI.FilterType.MONITOR_FILTER)
                 {
-                    comboBox_EventLevel.Items.Add(item.ToString());
+                    //disable some non monitor settings
+                    label_protector1.Visible = false;
+                    textBox_ProtectedPID.Visible = false;
+                    button_InfoProtectPid.Visible = false;
+                    button_SelectProtectPID.Visible = false;
 
-                    if ((uint)item == (uint)GlobalConfig.EventLevel)
-                    {
-                        comboBox_EventLevel.SelectedItem = item.ToString();
-                    }
+                    checkBox_BlockFormatting.Visible = false;
+                    checkBox_BlockUSBRead.Visible = false;
+                    checkBox_BlockUSBWrite.Visible = false;
+                    button_InfoBlockVolumeFormatting.Visible = false;
+                    button_InfoBlockUSBWrite.Visible = false;
+                    button_InfoBlockUSBRead.Visible = false;
                 }
 
                 textBox_MaximumFilterMessage.Text = GlobalConfig.MaximumFilterMessages.ToString();
                 textBox_TransactionLog.Text = GlobalConfig.FilterMessageLogName;
-                textBox_LogSize.Text = (GlobalConfig.FilterMessageLogFileSize/1024).ToString();
                 checkBox_TransactionLog.Checked = GlobalConfig.EnableLogTransaction;
                 checkBox_OutputMessageToConsole.Checked = GlobalConfig.OutputMessageToConsole;
-                checkBox_EnableNotification.Checked = GlobalConfig.EnableNotification;
                 checkBox_DisableDir.Checked =  GlobalConfig.DisableDirIO;
+
+                textBox_ConnectionThreads.Text = GlobalConfig.FilterConnectionThreads.ToString();
+                textBox_ConnectionTimeout.Text = GlobalConfig.ConnectionTimeOut.ToString();
 
                 if ((GlobalConfig.BooleanConfig & (uint)FilterAPI.BooleanConfig.ENABLE_SEND_DATA_BUFFER) > 0)
                 {
@@ -68,24 +78,79 @@ namespace EaseFilter.CommonObjects
                     checkBox_SendBuffer.Checked = false;
                 }
 
+                if ((GlobalConfig.VolumeControlFlag & (uint)FilterAPI.VolumeControlFlag.GET_ATTACHED_VOLUME_INFO) > 0)
+                {
+                    checkBox_GetVolumeInfo.Checked = true;
+                }
+                else
+                {
+                    checkBox_GetVolumeInfo.Checked = false;
+                }
+
+                if ((GlobalConfig.VolumeControlFlag & (uint)FilterAPI.VolumeControlFlag.VOLUME_ATTACHED_NOTIFICATION) > 0)
+                {
+                    checkBox_CallbackVolumeAttached.Checked = true;
+                }
+                else
+                {
+                    checkBox_CallbackVolumeAttached.Checked = false;
+                }
+
+                if ((GlobalConfig.VolumeControlFlag & (uint)FilterAPI.VolumeControlFlag.VOLUME_DETACHED_NOTIFICATION) > 0)
+                {
+                    checkBox_CallbackVolumeDetached.Checked = true;
+                }
+                else
+                {
+                    checkBox_CallbackVolumeDetached.Checked = false;
+                }
+
+                if ((GlobalConfig.VolumeControlFlag & (uint)FilterAPI.VolumeControlFlag.BLOCK_VOLUME_DISMOUNT) > 0)
+                {
+                    checkBox_BlockFormatting.Checked = true;
+                }
+                else
+                {
+                    checkBox_BlockFormatting.Checked = false;
+                }
+
+                if ((GlobalConfig.VolumeControlFlag & (uint)FilterAPI.VolumeControlFlag.BLOCK_USB_READ) > 0)
+                {
+                    checkBox_BlockUSBRead.Checked = true;
+                }
+                else
+                {
+                    checkBox_BlockUSBRead.Checked = false;
+                }
+
+                if ((GlobalConfig.VolumeControlFlag & (uint)FilterAPI.VolumeControlFlag.BLOCK_USB_WRITE) > 0)
+                {
+                    checkBox_BlockUSBWrite.Checked = true;
+                }
+                else
+                {
+                    checkBox_BlockUSBWrite.Checked = false;
+                }
+
+
                 foreach (uint pid in GlobalConfig.IncludePidList)
                 {
-                    if (textBox_IncludePID.Text.Length > 0)
+                    if (textBox_ConnectionThreads.Text.Length > 0)
                     {
-                        textBox_IncludePID.Text += ";";
+                        textBox_ConnectionThreads.Text += ";";
                     }
 
-                    textBox_IncludePID.Text += pid.ToString();
+                    textBox_ConnectionThreads.Text += pid.ToString();
                 }
 
                 foreach (uint pid in GlobalConfig.ExcludePidList)
                 {
-                    if (textBox_ExcludePID.Text.Length > 0)
+                    if (textBox_ConnectionTimeout.Text.Length > 0)
                     {
-                        textBox_ExcludePID.Text += ";";
+                        textBox_ConnectionTimeout.Text += ";";
                     }
 
-                    textBox_ExcludePID.Text += pid.ToString();
+                    textBox_ConnectionTimeout.Text += pid.ToString();
                 }
 
                 foreach (uint pid in GlobalConfig.ProtectPidList)
@@ -118,14 +183,14 @@ namespace EaseFilter.CommonObjects
             listView_FilterRules.Columns.Add("ExcludeFilterMask", 200, System.Windows.Forms.HorizontalAlignment.Left);
             listView_FilterRules.Columns.Add("AccessFlags", 100, System.Windows.Forms.HorizontalAlignment.Left);
 
-            foreach (FilterRule rule in GlobalConfig.FilterRules.Values)
+            foreach (FileFilterRule rule in GlobalConfig.FilterRules.Values)
             {
                 AddItem(rule);
             }
 
         }
 
-        private void AddItem(FilterRule newRule)
+        private void AddItem(FileFilterRule newRule)
         {
             string[] itemStr = new string[listView_FilterRules.Columns.Count];
             itemStr[0] = listView_FilterRules.Items.Count.ToString();
@@ -140,17 +205,8 @@ namespace EaseFilter.CommonObjects
         private void button_AddFilter_Click(object sender, EventArgs e)
         {
             string defaultAccessFlags = ((uint)FilterAPI.ALLOW_MAX_RIGHT_ACCESS ).ToString();
-            FilterRule filterRule = new FilterRule();
-            filterRule.Id = GlobalConfig.GetFilterRuleId();
-            filterRule.IncludeFileFilterMask = "c:\\test\\*";
-            filterRule.EncryptMethod = (int)FilterAPI.EncryptionMethod.ENCRYPT_FILE_WITH_SAME_KEY_AND_UNIQUE_IV;
-            filterRule.EventType = (uint)(FilterAPI.EVENTTYPE.CREATED|FilterAPI.EVENTTYPE.DELETED|FilterAPI.EVENTTYPE.RENAMED|FilterAPI.EVENTTYPE.WRITTEN|FilterAPI.EVENTTYPE.READ|FilterAPI.EVENTTYPE.SECURITY_CHANGED);
-
-            filterRule.MonitorIO = 2863311530;
-            filterRule.ControlIO = 2863311530;
-            filterRule.AccessFlag = (uint)FilterAPI.ALLOW_MAX_RIGHT_ACCESS ;
-
-            FilterRuleForm filterRuleForm = new FilterRuleForm(filterRule);
+           
+            FilterRuleForm filterRuleForm = new FilterRuleForm();
             filterRuleForm.StartPosition = FormStartPosition.CenterParent;
             filterRuleForm.ShowDialog();
 
@@ -167,7 +223,7 @@ namespace EaseFilter.CommonObjects
             }
 
             System.Windows.Forms.ListViewItem item = listView_FilterRules.SelectedItems[0];
-            FilterRule filterRule = (FilterRule)item.Tag;
+            FileFilterRule filterRule = ((FileFilterRule)item.Tag).Copy();
 
             FilterRuleForm filterRuleForm = new FilterRuleForm(filterRule);
             filterRuleForm.StartPosition = FormStartPosition.CenterParent;
@@ -187,7 +243,7 @@ namespace EaseFilter.CommonObjects
 
             foreach (System.Windows.Forms.ListViewItem item in listView_FilterRules.SelectedItems)
             {
-                FilterRule filterRule = (FilterRule)item.Tag;
+                FileFilterRule filterRule = (FileFilterRule)item.Tag;
                 GlobalConfig.RemoveFilterRule(filterRule.IncludeFileFilterMask);
             }
 
@@ -203,11 +259,63 @@ namespace EaseFilter.CommonObjects
                 GlobalConfig.MaximumFilterMessages = int.Parse(textBox_MaximumFilterMessage.Text);
                 GlobalConfig.EnableLogTransaction = checkBox_TransactionLog.Checked;
                 GlobalConfig.OutputMessageToConsole = checkBox_OutputMessageToConsole.Checked;
-                GlobalConfig.EnableNotification = checkBox_EnableNotification.Checked;
                 GlobalConfig.FilterMessageLogName = textBox_TransactionLog.Text;
-                GlobalConfig.FilterMessageLogFileSize = long.Parse(textBox_LogSize.Text) * 1024;
-                GlobalConfig.EventLevel = (EventLevel)comboBox_EventLevel.SelectedIndex;
                 GlobalConfig.DisableDirIO = checkBox_DisableDir.Checked;
+
+                if (checkBox_BlockFormatting.Checked)
+                {
+                    GlobalConfig.VolumeControlFlag |= (uint)FilterAPI.VolumeControlFlag.BLOCK_VOLUME_DISMOUNT;
+                }
+                else
+                {
+                    GlobalConfig.VolumeControlFlag &= (uint)(~FilterAPI.VolumeControlFlag.BLOCK_VOLUME_DISMOUNT);
+                }
+
+                if (checkBox_CallbackVolumeAttached.Checked)
+                {
+                    GlobalConfig.VolumeControlFlag |= (uint)FilterAPI.VolumeControlFlag.VOLUME_ATTACHED_NOTIFICATION;
+                }
+                else
+                {
+                    GlobalConfig.VolumeControlFlag &= (uint)(~FilterAPI.VolumeControlFlag.VOLUME_ATTACHED_NOTIFICATION);
+                }
+
+                if (checkBox_CallbackVolumeDetached.Checked)
+                {
+                    GlobalConfig.VolumeControlFlag |= (uint)FilterAPI.VolumeControlFlag.VOLUME_DETACHED_NOTIFICATION;
+                }
+                else
+                {
+                    GlobalConfig.VolumeControlFlag &= (uint)(~FilterAPI.VolumeControlFlag.VOLUME_DETACHED_NOTIFICATION);
+                }
+
+                if (checkBox_GetVolumeInfo.Checked)
+                {
+                    GlobalConfig.VolumeControlFlag |= (uint)FilterAPI.VolumeControlFlag.GET_ATTACHED_VOLUME_INFO;
+                }
+                else
+                {
+                    GlobalConfig.VolumeControlFlag &= (uint)(~FilterAPI.VolumeControlFlag.GET_ATTACHED_VOLUME_INFO);
+                }
+
+                if (checkBox_BlockUSBRead.Checked)
+                {
+                    GlobalConfig.VolumeControlFlag |= (uint)FilterAPI.VolumeControlFlag.BLOCK_USB_READ;
+                }
+                else
+                {
+                    GlobalConfig.VolumeControlFlag &= (uint)(~FilterAPI.VolumeControlFlag.BLOCK_USB_READ);
+                }
+
+                if (checkBox_BlockUSBWrite.Checked)
+                {
+                    GlobalConfig.VolumeControlFlag |= (uint)FilterAPI.VolumeControlFlag.BLOCK_USB_WRITE;
+                }
+                else
+                {
+                    GlobalConfig.VolumeControlFlag &= (uint)(~FilterAPI.VolumeControlFlag.BLOCK_USB_WRITE);
+                }
+
 
                 if (checkBox_SendBuffer.Checked)
                 {
@@ -218,38 +326,8 @@ namespace EaseFilter.CommonObjects
                     GlobalConfig.BooleanConfig &= (uint)(~FilterAPI.BooleanConfig.ENABLE_SEND_DATA_BUFFER);
                 }
 
-                List<uint> inPids = new List<uint>();
-                if (textBox_IncludePID.Text.Length > 0)
-                {
-                    if (textBox_IncludePID.Text.EndsWith(";"))
-                    {
-                        textBox_IncludePID.Text = textBox_IncludePID.Text.Remove(textBox_IncludePID.Text.Length - 1);
-                    }
-
-                    string[] pids = textBox_IncludePID.Text.Split(new char[] { ';' });
-                    for (int i = 0; i < pids.Length; i++)
-                    {
-                        inPids.Add(uint.Parse(pids[i].Trim()));
-                    }
-                }
-                 
-                GlobalConfig.IncludePidList = inPids;
-
-                List<uint> exPids = new List<uint>();
-                if (textBox_ExcludePID.Text.Length > 0)
-                {
-                    if (textBox_ExcludePID.Text.EndsWith(";"))
-                    {
-                        textBox_ExcludePID.Text = textBox_ExcludePID.Text.Remove(textBox_ExcludePID.Text.Length - 1);
-                    }
-
-                    string[] pids = textBox_ExcludePID.Text.Split(new char[] { ';' });
-                    for (int i = 0; i < pids.Length; i++)
-                    {
-                        exPids.Add(uint.Parse(pids[i].Trim()));
-                    }
-                }
-                GlobalConfig.ExcludePidList = exPids;
+                GlobalConfig.FilterConnectionThreads = int.Parse(textBox_ConnectionThreads.Text);
+                GlobalConfig.ConnectionTimeOut = int.Parse(textBox_ConnectionTimeout.Text);
 
                 List<uint> protectPids = new List<uint>();
                 if (textBox_ProtectedPID.Text.Trim().Length > 0)
@@ -289,22 +367,22 @@ namespace EaseFilter.CommonObjects
         private void button_SelectIncludePID_Click(object sender, EventArgs e)
         {
 
-            OptionForm optionForm = new OptionForm(OptionForm.OptionType.ProccessId, textBox_IncludePID.Text);
+            OptionForm optionForm = new OptionForm(OptionForm.OptionType.ProccessId, textBox_ConnectionThreads.Text);
 
             if (optionForm.ShowDialog() == System.Windows.Forms.DialogResult.OK)
             {
-                textBox_IncludePID.Text = optionForm.ProcessId;
+                textBox_ConnectionThreads.Text = optionForm.ProcessId;
             }
         }
 
         private void button_SelectExcludePID_Click(object sender, EventArgs e)
         {
 
-            OptionForm optionForm = new OptionForm(OptionForm.OptionType.ProccessId, textBox_ExcludePID.Text);
+            OptionForm optionForm = new OptionForm(OptionForm.OptionType.ProccessId, textBox_ConnectionTimeout.Text);
 
             if (optionForm.ShowDialog() == System.Windows.Forms.DialogResult.OK)
             {
-                textBox_ExcludePID.Text = optionForm.ProcessId;
+                textBox_ConnectionTimeout.Text = optionForm.ProcessId;
             }
         }
 
@@ -318,8 +396,73 @@ namespace EaseFilter.CommonObjects
                 textBox_ProtectedPID.Text = optionForm.ProcessId;
             }
         }
-     
-       
+
+        private void button_InfoProtectPid_Click(object sender, EventArgs e)
+        {
+            MessageBox.Show("Prevent the processes from being terminated when the process Id list is not empty, multiple process Ids are supported.");
+        }
+
+        private void button_InfoConnectionThreads_Click(object sender, EventArgs e)
+        {
+            MessageBox.Show("The number of the threads to communicate with the filter driver to get the events.");
+        }
+
+        private void button_InfoConnectionTimeout_Click(object sender, EventArgs e)
+        {
+            MessageBox.Show("The maximum timeout the filter driver wait for the IO event return in seconds.");
+        }
+
+        private void button_InfoMessageOutput_Click(object sender, EventArgs e)
+        {
+            MessageBox.Show("Enable or disable the message displaying in console when there are notfication events were fired.");
+        }
+
+        private void button_InfoLogMessage_Click(object sender, EventArgs e)
+        {
+            MessageBox.Show("Enable or disable logging the message to a file when there are notfication events were fired.");
+        }
+
+        private void button_InfoHideDirIO_Click(object sender, EventArgs e)
+        {
+            MessageBox.Show("Enable or disable the directory IO message displaying in console when there are notfication events were fired.");
+        }
+
+        private void button_InfoGetVolumeInfo_Click(object sender, EventArgs e)
+        {
+            MessageBox.Show("Get all the attached volume information from the filter driver when the service is started if it was enabled.");
+        }
+
+        private void button_InfoNewVolumeInfo_Click(object sender, EventArgs e)
+        {
+            MessageBox.Show("Get the notification when the filter driver attached to a new volume if it was enabled.");
+        }
+
+        private void button_InfoSendBuffer_Click(object sender, EventArgs e)
+        {
+            MessageBox.Show("In order to reduce the stress of the events, it will send the read/write data when the read/write events were fired only when it was enabled.");
+        }
+
+        private void button_InfoBlockVolumeFormatting_Click(object sender, EventArgs e)
+        {
+            MessageBox.Show("Prevent all the attached volumes from being formatting when it was enabled.");
+        }
+
+        private void button_InfoVolumeDetach_Click(object sender, EventArgs e)
+        {
+            MessageBox.Show("Get the notification when a attached volume was detached if it was enabled.");
+        }
+
+        private void button_InfoBlockUSBWrite_Click(object sender, EventArgs e)
+        {
+            MessageBox.Show("Block the write data to the USB disk.");
+        }
+
+        private void button_InfoBlockUSBRead_Click(object sender, EventArgs e)
+        {
+            MessageBox.Show("Block the read data from the USB disk.");
+        }
+
+             
      
     }
 }

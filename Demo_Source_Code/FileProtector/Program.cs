@@ -20,6 +20,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Forms;
 
+using EaseFilter.FilterControl;
+
 namespace FileProtector
 {
     static class Program
@@ -28,24 +30,44 @@ namespace FileProtector
         /// The main entry point for the application.
         /// </summary>
         [STAThread]
-        static void Main()
+        static void Main(string[] args)
         {
-            bool mutexCreated = false;
-            System.Threading.Mutex mutex = new System.Threading.Mutex(true, "EaseFilter", out mutexCreated);
 
-            if (!mutexCreated)
+            if (args.Length > 0)
             {
-                MessageBox.Show("FilterAPI was loaded by another process, start application failed.", "Start", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                mutex.Close();
-                return;
+                string command = args[0];
+                switch (command.ToLower())
+                {
+                    case "-installdriver":
+                        {
+                            bool ret = FilterAPI.InstallDriver();
+                            if (!ret)
+                            {
+                                Console.WriteLine("Install driver failed:" + FilterAPI.GetLastErrorMessage());
+                            }
+
+                            break;
+                        }
+
+                    case "-uninstalldriver":
+                        {
+                            bool ret = FilterAPI.UnInstallDriver();
+                            if (!ret)
+                            {
+                                Console.WriteLine("UnInstall driver failed:" + FilterAPI.GetLastErrorMessage());
+                            }
+
+                            break;
+                        }
+                }
+            }
+            else
+            {
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
+                Application.Run(new ProtectorForm());
             }
 
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new TrayForm());
-
-
-            mutex.Close();
         }
     }
 }

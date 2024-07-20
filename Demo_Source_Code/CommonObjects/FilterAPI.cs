@@ -26,18 +26,14 @@ using System.Security.Principal;
 using System.Security.Cryptography;
 
 
-namespace EaseFilter.CommonObjects
+namespace EaseFilter.FilterControl
 {
 
     static public class FilterAPI
     {
-        public delegate Boolean FilterDelegate(IntPtr sendData, IntPtr replyData);
-        public delegate void DisconnectDelegate();
-        static GCHandle gchFilter;
-        static GCHandle gchDisconnect;
-        static bool isFilterStarted = false;
         public const int MAX_FILE_NAME_LENGTH = 1024;
         public const int MAX_SID_LENGTH = 256;
+        public const int INET_ADDR_STR_LEN = 22;
         public const int MAX_MESSAGE_LENGTH = 65536;
         public const int MAX_PATH = 260;
         public const int MAX_ERROR_MESSAGE_SIZE = 1024;
@@ -50,9 +46,6 @@ namespace EaseFilter.CommonObjects
         public const uint FILE_FLAG_NO_BUFFERING =  0x20000000;
         public const uint FILE_ATTRIBUTE_REPARSE_POINT =  (uint)FileAttributes.ReparsePoint;
 
-        static Dictionary<string, string> userNameTable = new Dictionary<string, string>();
-        static Dictionary<uint, string> processNameTable = new Dictionary<uint, string>();
-
         //for encryption default IV key
         public static byte[] DEFAULT_IV_TAG = { 0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7, 0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff };
 
@@ -61,31 +54,31 @@ namespace EaseFilter.CommonObjects
             /// <summary>
             /// File system control filter driver
             /// </summary>
-            FILE_SYSTEM_CONTROL = 0x01,
+            CONTROL_FILTER = 0x01,
             /// <summary>
             /// File system encryption filter driver
             /// </summary>
-            FILE_SYSTEM_ENCRYPTION = 0x02,
+            ENCRYPTION_FILTER = 0x02,
             /// <summary>
             /// File system monitor filter driver
             /// </summary>
-            FILE_SYSTEM_MONITOR = 0x04,
+            MONITOR_FILTER = 0x04,
             /// <summary>
             /// File system registry filter driver
             /// </summary>
-            FILE_SYSTEM_REGISTRY = 0x08,
+            REGISTRY_FILTER = 0x08,
             /// <summary>
             /// File system process filter driver
             /// </summary>
-            FILE_SYSTEM_PROCESS = 0x10,
+            PROCESS_FILTER = 0x10,
             /// <summary>
             /// File system hierarchical storage management filter driver
             /// </summary>
-            FILE_SYSTEM_HSM = 0x40,
+            HSM_FILTER = 0x40,
             /// <summary>
             /// File system cloud storage filter driver
             /// </summary>
-            FILE_SYSTEM_CLOUD = 0x80,
+            CLOUD_FILTER = 0x80,
         }
 
         public enum EncryptionMethod : uint
@@ -156,7 +149,31 @@ namespace EaseFilter.CommonObjects
             /// <summary>
             /// if it is enabled, it will reopen the file when rehydration of the stub file.
             /// </summary>
-            ENABLE_REOPEN_FILE_ON_REHYDRATION = 0x00000400,           
+            ENABLE_REOPEN_FILE_ON_REHYDRATION = 0x00000400,
+            /// <summary>
+            /// if it is true, it will enable the buffer for monitor events and send asynchronously, 
+            /// or the monitor event will wait till the service picks up the events.
+            /// </summary>
+            ENABLE_MONITOR_EVENT_BUFFER = 0x00000800,
+            /// <summary>
+            /// if it is true, it will send the event when it was blocked by the config setting.
+            /// </summary>
+            ENABLE_SEND_DENIED_EVENT = 0x00001000,
+            /// <summary>
+            /// if it is true, and the write access is false,the write will return success 
+            /// with zero data being written to the file, and send the write data to the user mode.
+            /// this flag is reserved for custom feature.
+            /// </summary>
+            ENABLE_WRITE_WITH_ZERO_DATA_AND_SEND_DATA = 0x00002000,
+            /// <summary>
+            /// if it is true, the portable massive storage won't be treated as USB.
+            //	this is for the volume control flag for BLOCK_USB_READ,BLOCK_USB_WRITE
+            /// </summary>
+            DISABLE_REMOVABLE_MEDIA_AS_USB = 0x00004000,
+            /// <summary>
+            /// if it is true, it will block the encrypted file to be renamed to different folder.
+            /// </summary>
+            DISABLE_RENAME_ENCRYPTED_FILE = 0x00008000,
          
         }
 
@@ -217,10 +234,225 @@ namespace EaseFilter.CommonObjects
             /// send the thread handle operations ifnormation
             /// </summary>
             FILTER_SEND_THREAD_HANDLE_INFO = 0x0001000d,
+            /// <summary>
+            /// send the volume information when it was attached
+            /// </summary>
+            FILTER_SEND_ATTACHED_VOLUME_INFO = 0x0001000e,
+            /// <summary>
+            /// send the volume information when it was detached
+            /// </summary>
+            FILTER_SEND_DETACHED_VOLUME_INFO = 0x0001000f,
+            /// <summary>
+            /// send the event when the file IO was blocked by the config setting.
+            /// </summary>
+            FILTER_SEND_DENIED_FILE_IO_EVENT = 0x00010010,
+            /// <summary>
+            /// send the event when the volume dismount was blocked by the config setting.
+            /// </summary>
+            FILTER_SEND_DENIED_VOLUME_DISMOUNT_EVENT = 0x00010011,
+            /// <summary>
+            /// send the event when the process creation was blocked by the config setting.
+            /// </summary>
+            FILTER_SEND_DENIED_PROCESS_EVENT = 0x00010012,
+            /// <summary>
+            /// send the event when the registry access was blocked by the config setting.
+            /// </summary>
+            FILTER_SEND_DENIED_REGISTRY_ACCESS_EVENT = 0x00010013,
+            /// <summary>
+            /// send the event when the protected process was terminiated ungratefully.
+            /// </summary>
+            FILTER_SEND_DENIED_PROCESS_TERMINATED_EVENT = 0x00010014,
+            /// <summary>
+            /// send the event when the read from USB was blocked.
+            /// </summary>
+            FILTER_SEND_DENIED_USB_READ_EVENT = 0x00010015,
+            /// <summary>
+            /// send the event when the write to USB was blocked.
+            /// </summary>
+            FILTER_SEND_DENIED_USB_WRITE_EVENT = 0x00010016,
+            /// <summary>
+            /// send process information before it was terminiated.
+            /// </summary>
+            FILTER_SEND_PRE_TERMINATE_PROCESS_INFO = 0x00010017,
 
         }
 
-
+        public enum IOEventName
+        {
+            /// <summary>
+            /// Fires this event before the file create IO was going down to the file system.
+            /// </summary>
+            IOPreFileCreate = 0x00020001,
+            /// <summary>
+            /// Fires this event after the file create IO was returned from the file system.
+            /// </summary>
+            IOPostFileCreate,
+            /// <summary>
+            /// Fires this event before the file read IO was going down to the file system.
+            /// </summary>
+            IOPreFileRead,
+            /// <summary>
+            /// Fires this event after the file read IO was returned from the file system.
+            /// </summary>
+            IOPostFileRead,
+            /// <summary>
+            /// Fires this event before the file write IO was going down to the file system.
+            /// </summary>
+            IOPreFileWrite,
+            /// <summary>
+            /// Fires this event after the file write IO was returned from the file system.
+            /// </summary>
+            IOPostFileWrite,
+            /// <summary>
+            /// Fires this event before the query file size IO was going down to the file system.
+            /// </summary>
+            IOPreQueryFileSize,
+            /// <summary>
+            /// Fires this event after the query file size IO was returned from the file system.
+            /// </summary>
+            IOPostQueryFileSize,
+            /// <summary>
+            /// Fires this event before the query file basic info IO was going down to the file system.
+            /// </summary>
+            IOPreQueryFileBasicInfo,
+            /// <summary>
+            /// Fires this event after the query file basic info IO was returned from the file system.
+            /// </summary>
+            IOPostQueryFileBasicInfo,
+            /// <summary>
+            /// Fires this event before the query file standard info IO was going to the file system.
+            /// </summary>
+            IOPreQueryFileStandardInfo,
+            /// <summary>
+            /// Fires this event after the query file standard info IO was returned from the file system.
+            /// </summary>
+            IOPostQueryFileStandardInfo,
+            /// <summary>
+            /// Fires this event before the query file network info IO was going down to the file system.
+            /// </summary>
+            IOPreQueryFileNetworkInfo,
+            /// <summary>
+            /// Fires this event after the query file network info IO was returned from the file system.
+            /// </summary>
+            IOPostQueryFileNetworkInfo,
+            /// <summary>
+            /// Fires this event before the query file Id IO was going down to the file system.
+            /// </summary>
+            IOPreQueryFileId,
+            /// <summary>
+            /// Fires this event after the query file Id IO was returned from the file system.
+            /// </summary>
+            IOPostQueryFileId,
+            /// <summary>
+            /// Fires this event before the query file info IO was going down to the file system
+            /// if the query file information class is not 'QueryFileSize','QueryFileBasicInfo'
+            /// ,'QueryFileStandardInfo','QueryFileNetworkInfo' or 'QueryFileId'.
+            /// </summary>
+            IOPreQueryFileInfo,
+            /// <summary>
+            /// Fires this event after the query file info IO was returned from the file system.
+            /// </summary>
+            IOPostQueryFileInfo,
+            /// <summary>
+            /// Fires this event before the set file size IO was going down to the file system.
+            /// </summary>         
+            IOPreSetFileSize,
+            /// <summary>
+            /// Fires this event after the set file size IO was returned from the file system.
+            /// </summary>
+            IOPostSetFileSize,
+            /// <summary>
+            /// Fires this event before the set file basic info IO was going down to the file system.
+            /// </summary>
+            IOPreSetFileBasicInfo,
+            /// <summary>
+            /// Fires this event after the set file basic info IO was returned from the file system.
+            /// </summary>
+            IOPostSetFileBasicInfo,
+            /// <summary>
+            /// Fires this event before the set file standard info IO was going down to the file system.
+            /// </summary>
+            IOPreSetFileStandardInfo,
+            /// <summary>
+            /// Fires this event after the set file standard info IO was returned from the file system.
+            /// </summary>
+            IOPostSetFileStandardInfo,
+            /// <summary>
+            /// Fires this event before the set file network info was going down to the file system.
+            /// </summary>
+            IOPreSetFileNetworkInfo,
+            /// <summary>
+            /// Fires this event after the set file network info was returned from the file system.
+            /// </summary>
+            IOPostSetFileNetworkInfo,
+            /// <summary>
+            /// Fires this event before the file move or rename IO was going down to the file system.
+            /// </summary>
+            IOPreMoveOrRenameFile,
+            /// <summary>
+            /// Fires this event after the file move or rename IO was returned from the file system.
+            /// </summary>
+            IOPostMoveOrRenameFile,
+            /// <summary>
+            /// Fires this event before the file delete IO was going down to the file system.
+            /// </summary>
+            IOPreDeleteFile,
+            /// <summary>
+            /// Fires this event after the file delete IO was returned from the file system.
+            /// </summary>
+            IOPostDeleteFile,
+            /// <summary>
+            /// Fires this event before the set file info IO was going down to the file system
+            /// if the information class is not 'SetFileSize','SetFileBasicInfo'
+            /// ,'SetFileStandardInfo','SetFileNetworkInfo'.
+            /// </summary>
+            IOPreSetFileInfo,
+            /// <summary>
+            /// Fires this event after the set file info IO was returned from the file system.
+            /// </summary>
+            IOPostSetFileInfo,
+            /// <summary>
+            /// Fires this event before the query directory file info was going down to the file system.
+            /// </summary>
+            IOPreQueryDirectoryFile,
+            /// <summary>
+            /// Fires this event after the query directory file info was returned from the file system.
+            /// </summary>
+            IOPostQueryDirectoryFile,
+            /// <summary>
+            /// Fires this event before the query file security IO was going down to the file system.
+            /// </summary>
+            IOPreQueryFileSecurity,
+            /// <summary>
+            /// Fires this event after the query file security IO was returned from the file system.
+            /// </summary>
+            IOPostQueryFileSecurity,
+            /// <summary>
+            /// Fires this event before the set file security IO was going down to the file system.
+            /// </summary>
+            IOPreSetFileSecurity,
+            /// <summary>
+            /// Fires thiis event after the set file security IO was returned from the file system.
+            /// </summary>
+            IOPostSetFileSecurity,
+            /// <summary>
+            /// Fire this event before the file handle close IO was going down to the file system.
+            /// </summary>
+            IOPreFileHandleClose,
+            /// <summary>
+            /// Fires this event after the file handle close IO was returned from the file system.
+            /// </summary>
+            IOPostFileHandleClose,
+            /// <summary>
+            /// Fires this event before the file close IO was going down to the file system.
+            /// </summary>
+            IOPreFileClose,
+            /// <summary>
+            /// Fires this event after the file close IO was returned from the file system.
+            /// </summary>
+            IOPostFileClose,               
+        }
+     
         /// <summary>
         /// the message type of the filter driver send the file IO request 
         /// </summary>
@@ -262,26 +494,44 @@ namespace EaseFilter.CommonObjects
         }
 
         /// <summary>
-        /// the file IO event type will be sent by the filter driver if the IO was happened.
+        /// The file changed events for monitor filter, it will be fired after the file handle was closed.
         /// </summary>
-        public enum EVENTTYPE : uint
+        public enum FileChangedEvents:uint
         {
-            NONE = 0,
-            CREATED = 0x00000020,
-            WRITTEN = 0x00000040,
-            RENAMED = 0x00000080,
-            DELETED = 0x00000100,
-            SECURITY_CHANGED = 0x00000200,
-            INFO_CHANGED = 0x00000400,
-            READ = 0x00000800,
+            /// <summary>
+            /// Fires this event when the new file was created after the file handle closed
+            /// </summary>
+            NotifyFileWasCreated = 0x00000020,
+            /// <summary>
+            /// Fires this event when the file was written after the file handle closed
+            /// </summary>
+            NotifyFileWasWritten = 0x00000040,
+            /// <summary>
+            /// Fires this event when the file was moved or renamed after the file handle closed
+            /// </summary>
+            NotifyFileWasRenamed = 0x00000080,
+            /// <summary>
+            /// Fires this event when the file was deleted after the file handle closed
+            /// </summary>
+            NotifyFileWasDeleted = 0x00000100,
+            /// <summary>
+            /// Fires this event when the file's security was changed after the file handle closed
+            /// </summary>
+            NotifyFileSecurityWasChanged = 0x00000200,
+            /// <summary>
+            /// Fires this event when the file's information was changed after the file handle closed
+            /// </summary>
+            NotifyFileInfoWasChanged = 0x00000400,
+            /// <summary>
+            /// Fires this event when the file's data was read after the file handle closed
+            /// </summary>
+            NotifyFileWasRead = 0x00000800,
         }
 
-        public enum NTSTATUS : uint
-        {
-            STATUS_SUCCESS = 0,
-            STATUS_UNSUCCESSFUL = 0xc0000001,
-            STATUS_ACCESS_DENIED = 0xC0000022,
-        }
+        /// <summary>
+        /// Fires all file events it this value was set.
+        /// </summary>
+        public const uint NotifyAllFileEvents = 0xfffffff0;
 
         /// <summary>
         /// The maximum file access right
@@ -423,7 +673,11 @@ namespace EaseFilter.CommonObjects
             /// <summary>
             /// if the encryption filter rule is enabled, it will encrypt unencrypted data on read when the flag value is 0.
             /// </summary>
-            DISABLE_ENCRYPT_DATA_ON_READ = 0x02000000, 
+            DISABLE_ENCRYPT_DATA_ON_READ = 0x02000000,
+            /// <summary>
+            /// prevent the protected files from being copying out to the USB when the flag value is 0.
+            /// </summary>
+            ALLOW_COPY_PROTECTED_FILES_TO_USB = 0x04000000, 
             /// <summary>
             /// If it is not exclude filter rule,the access flag can't be 0, at least you need to include this flag
             /// for filter driver to process this filter rule.
@@ -468,41 +722,223 @@ namespace EaseFilter.CommonObjects
 
         };
      
+        /// <summary>
+        /// This is the data structure the filter driver send request to the user mode service.
+        /// </summary>
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
         public struct MessageSendData
         {
-            public uint MessageId;          //this is the request sequential number.
-            public IntPtr FileObject;       //the address of FileObject,it is equivalent to file handle,it is unique per file stream open.
-            public IntPtr FsContext;        //the address of FsContext,it is unique per file.
-            public uint MessageType;        //the I/O request type.
-            public uint ProcessId;          //the process ID for the process associated with the thread that originally requested the I/O operation.
-            public uint ThreadId;           //the thread ID which requested the I/O operation.
-            public long Offset;             //the read/write offset.
-            public uint Length;             //the read/write length.
-            public long FileSize;           //the size of the file for the I/O operation.
-            public long TransactionTime;    //the transaction time in UTC of this request.
-            public long CreationTime;       //the creation time in UTC of the file.
-            public long LastAccessTime;     //the last access time in UTC of the file.
-            public long LastWriteTime;      //the last write time in UTC of the file.
-            public uint FileAttributes;     //the file attributes.
-            public uint DesiredAccess;      //the DesiredAccess for file open, please reference CreateFile windows API.
-            public uint Disposition;        //the Disposition for file open, please reference CreateFile windows API.
-            public uint SharedAccess;       //the SharedAccess for file open, please reference CreateFile windows API.
-            public uint CreateOptions;      //the CreateOptions for file open, please reference CreateFile windows API.
-            public uint CreateStatus;       //the CreateStatus after file was openned, please reference CreateFile windows API.
-            public uint InfoClass;          //the information class or security information
-            public uint Status;             //the I/O status which returned from file system.
-            public uint FileNameLength;     //the file name length in byte.
+            /// <summary>
+            ///the verification number which verifiys the data structure integerity.
+            /// </summary>
+            public uint VerificationNumber;
+            /// <summary>
+            /// This is the command Id which was sent by filter driver.
+            /// </summary>
+            public uint FilterCommand;     
+            /// <summary>
+            /// This is the  sequential message Id, just for reference.
+            /// </summary>
+            public uint MessageId;          
+            /// <summary>
+            /// This the filter rule Id associated to the filter rule.
+            /// </summary>
+            public uint FilterRuleId;       
+            /// <summary>
+            /// This is the ip address of the remote computer when it accesses the file via SMB.
+            /// it is only effected for win 7 or later OS.
+            /// </summary>
+            [MarshalAs(UnmanagedType.ByValArray, SizeConst = INET_ADDR_STR_LEN*2)]
+            public byte[] RemoteIP;    
+            /// <summary>
+            ///the address of FileObject,it is equivalent to file handle,it is unique per file stream open.
+            /// </summary>
+            public IntPtr FileObject;       
+            /// <summary>
+            ///the address of FsContext,it is unique per file.
+            /// </summary>
+            public IntPtr FsContext;        
+            /// <summary>
+            ///the message type of the file I/O, registry class.
+            /// </summary>
+            public ulong MessageType;        
+            /// <summary>
+            ///the process ID for the process associated with the thread that originally requested the I/O operation.
+            /// </summary>
+            public uint ProcessId;          
+            /// <summary>
+            ///the thread ID which requested the I/O operation.
+            /// </summary>
+            public uint ThreadId;           
+            /// <summary>
+            ///the read/write offset.
+            /// </summary>
+            public long Offset;             
+            /// <summary>
+            ///the read/write length.
+            /// </summary>
+            public uint Length;             
+            /// <summary>
+            ///the size of the file for the I/O operation.
+            /// </summary>
+            public long FileSize;           
+            /// <summary>
+            ///the transaction time in UTC of this request.
+            /// </summary>
+            public long TransactionTime;    
+            /// <summary>
+            ///the creation time in UTC of the file.
+            /// </summary>
+            public long CreationTime;       
+            /// <summary>
+            ///the last access time in UTC of the file.
+            /// </summary>
+            public long LastAccessTime;     
+            /// <summary>
+            ///the last write time in UTC of the file.
+            /// </summary>
+            public long LastWriteTime;      
+            /// <summary>
+            ///the file attributes.
+            /// </summary>
+            public uint FileAttributes;     
+            /// <summary>
+            ///the DesiredAccess for file open, please reference CreateFile windows API.
+            /// </summary>
+            public uint DesiredAccess;      
+            /// <summary>
+            ///the Disposition for file open, please reference CreateFile windows API.
+            /// </summary>
+            public uint Disposition;        
+            /// <summary>
+            ///the SharedAccess for file open, please reference CreateFile windows API.
+            /// </summary>
+            public uint SharedAccess;       
+            /// <summary>
+            ///the CreateOptions for file open, please reference CreateFile windows API.
+            /// </summary>
+            public uint CreateOptions;      
+            /// <summary>
+            ///the CreateStatus after file was openned, please reference CreateFile windows API.
+            /// </summary>
+            public uint CreateStatus;       
+            /// <summary>
+            ///this is the information class for security/directory/information IO 
+            /// </summary>
+            public uint InfoClass;          
+            /// <summary>
+            ///the I/O status which returned from file system.
+            /// </summary>
+            public uint Status;
+            /// <summary>
+            /// the return I/O (read/write) length 
+            /// </summary>
+            public uint ReturnLength;
+            /// <summary>
+            ///the file name length in byte.
+            /// </summary>
+            public uint FileNameLength;     
+            /// <summary>
+            ///the file name of the I/O operation.
+            /// </summary>
             [MarshalAs(UnmanagedType.ByValTStr, SizeConst = MAX_FILE_NAME_LENGTH)]
-            public string FileName;         //the file name of the I/O operation.
-            public uint SidLength;          //the length of the security identifier.
+            public string FileName;         
+            /// <summary>
+            ///the length of the security identifier.
+            /// </summary>
+            public uint SidLength;          
+            /// <summary>
+            ///the security identifier data.
+            /// </summary>
             [MarshalAs(UnmanagedType.ByValArray, SizeConst = MAX_SID_LENGTH)]
-            public byte[] Sid;              //the security identifier data.
-            public uint DataBufferLength;   //the data buffer length.
+            public byte[] Sid;                  
+            /// <summary>
+            ///the data buffer length.
+            /// </summary>
+            public uint DataBufferLength;   
+            /// <summary>
+            ///the data buffer which contains read/write/query information/set information data.
+            /// </summary>
             [MarshalAs(UnmanagedType.ByValArray, SizeConst = MAX_MESSAGE_LENGTH)]
-            public byte[] DataBuffer;       //the data buffer which contains read/write/query information/set information data.
-            public uint VerificationNumber; //the verification number which verifiys the data structure integerity.
+            public byte[] DataBuffer;       
+            
         }
+
+        
+        /// <summary>
+        /// The attached volume control flag.
+        /// </summary>
+        public enum VolumeControlFlag : uint
+        {
+            /// <summary>
+            /// Get all the attached volumes' information.
+            /// </summary>
+            GET_ATTACHED_VOLUME_INFO = 0x00000001,
+            /// <summary>
+            /// Get a notification when the filter driver attached to a volume.
+            /// </summary>
+            VOLUME_ATTACHED_NOTIFICATION = 0x00000002,
+            /// <summary>
+            /// Get a notification when the filter driver detached from a volume.
+            /// </summary>
+            VOLUME_DETACHED_NOTIFICATION = 0x00000004,
+            /// <summary>
+            /// Prevent the attched volumes from being formatted or dismounted.
+            /// </summary>
+            BLOCK_VOLUME_DISMOUNT = 0x00000008,
+            /// <summary>
+            ///Block the read from the USB disk.
+            /// </summary>
+            BLOCK_USB_READ = 0x00000010,
+            /// <summary>
+            ///Block the write to the USB disk
+            /// </summary>
+            BLOCK_USB_WRITE = 0x00000020,
+
+        }
+
+       /// <summary>
+      /// the structure of the attached volume information
+      /// </summary>
+      [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+      public struct VOLUME_INFO
+      {
+          /// <summary>
+          /// The length of the volume name.
+          /// </summary>
+          public uint VolumeNameLength;
+          /// <summary>
+          /// The volume name buffer.
+          /// </summary>
+          [MarshalAs(UnmanagedType.ByValTStr, SizeConst = MAX_FILE_NAME_LENGTH)]
+          public string VolumeName;
+          /// <summary>
+          /// The length of the volume dos file name.
+          /// </summary>
+          public uint VolumeDosNameLength;
+          /// <summary>
+          /// The volume dos file name buffer.
+          /// </summary>
+          [MarshalAs(UnmanagedType.ByValTStr, SizeConst = MAX_FILE_NAME_LENGTH)]
+          public string VolumeDosName;
+          /// <summary>
+          ///the volume file system type.
+          /// </summary>
+          public uint VolumeFilesystemType;
+          /// <summary>
+          ///the Characteristics of the attached device object if existed. 
+          /// </summary>
+          public uint DeviceCharacteristics;
+
+      }
+
+    /// <summary>
+    /// Set the volume control to get the notification of the attached volume information.
+    /// </summary>
+    /// <param name="volumeControlFlag"></param>
+    /// <returns></returns>
+      [DllImport("FilterAPI.dll", SetLastError = true)]
+      public static extern bool SetVolumeControlFlag(uint volumeControlFlag);
 
         /// <summary>
         /// the data structuct sent by the process filter driver
@@ -510,34 +946,6 @@ namespace EaseFilter.CommonObjects
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
         public struct PROCESS_INFO
         {
-            /// <summary>
-            ///this is the request sequential number. 
-            /// </summary>
-            public uint MessageId;
-            /// <summary>
-            /// reserve data
-            /// </summary>
-            public IntPtr reserve1;
-            /// <summary>
-            /// reserve data
-            /// </summary>
-            public IntPtr reserve2;        
-            /// <summary>
-            ///the process message  type.
-            /// </summary>
-            public uint MessageType;
-            /// <summary>
-            ///the transaction time in UTC of this message.
-            /// </summary>
-            public long TransactionTime;
-            /// <summary>
-            //the current process ID of the process.
-            /// </summary>
-            public uint ProcessId;
-            /// <summary>
-            ///the thread ID of the current operation thread.
-            /// </summary>
-            public uint ThreadId;
             /// <summary>
             ///The process ID of the parent process for the new process. Note that the parent process is not necessarily the same process as the process that created the new process.  
             /// </summary>
@@ -561,26 +969,7 @@ namespace EaseFilter.CommonObjects
             /// <summary>
             /// A Boolean value that specifies whether the ImageFileName member contains the exact file name that is used to open the process executable file.
             /// </summary>
-            public bool FileOpenNameAvailable;
-            /// <summary>
-            ///the length of the security identifier.
-            /// </summary>
-            public uint SidLength;
-            /// <summary>
-            ///the security identifier data.
-            /// </summary>
-            [MarshalAs(UnmanagedType.ByValArray, SizeConst = MAX_SID_LENGTH)]
-            public byte[] Sid;
-            /// <summary>
-            /// The length of the image file name.
-            /// </summary>
-            public uint ImageFileNameLength;
-            /// <summary>
-            /// The file name of the executable. If the FileOpenNameAvailable member is TRUE, the string specifies the exact file name that is used to open the executable file. 
-            /// If FileOpenNameAvailable is FALSE, the operating system might provide only a partial name.
-            /// </summary>
-            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = MAX_FILE_NAME_LENGTH)]
-            public string ImageFileName;
+            public bool FileOpenNameAvailable;      
             /// <summary>
             /// The length of the command line.
             /// </summary>
@@ -590,14 +979,6 @@ namespace EaseFilter.CommonObjects
             /// </summary>
             [MarshalAs(UnmanagedType.ByValTStr, SizeConst = MAX_FILE_NAME_LENGTH)]
             public string CommandLine;
-            /// <summary>
-            ///the status which returned from file system.
-            /// </summary>
-            public uint Status;             
-            /// <summary>
-            ///the verification number which verifiys the data structure integerity. 
-            /// </summary>
-            public uint VerificationNumber;
         }
 
         /// <summary>
@@ -685,7 +1066,7 @@ namespace EaseFilter.CommonObjects
             ref int messageLength);
 
         /// <summary>
-        /// start the filter driver service with callback settings
+        /// Create the filter driver connection with callback settings
         /// </summary>
         /// <param name="threadCount">the number of working threads waitting for the callback message</param>
         /// <param name="filterCallback">the callback function</param>
@@ -721,6 +1102,14 @@ namespace EaseFilter.CommonObjects
         public static extern bool SetConnectionTimeout(uint timeOutInSeconds);
 
         /// <summary>
+        /// set the maximum monitor event buffer size if monitorBuffer was enabled.
+        /// </summary>
+        /// <param name="maxMonitorEventBufferSize"></param>
+        /// <returns></returns>
+        [DllImport("FilterAPI.dll", SetLastError = true)]
+        public static extern bool SetMaxMonitorEventBuffersize(uint maxMonitorEventBufferSize);
+
+        /// <summary>
         /// Add the new filter rule to the filter driver.
         /// </summary>
         /// <param name="accessFlag">access control rights of the file IO to the files which match the filter mask</param>
@@ -738,11 +1127,8 @@ namespace EaseFilter.CommonObjects
 
         /// <summary>
         ///Set an encryption folder, every encrypted file has the unique iv key, 
-        ///the encrypted information was embedded into to the file as an extended attribute called reparse point, 
-        ///it only can be supported in NTFS. The same folder can mix encrypted files and unencrypted files,
-        ///the filter driver will know if the file was encrypted by checking the file reparse point attribute.
-        ///Since the reparse point attribute can’t be transferred, the encrypted file can’t be shared or copied outside of your computer with normal method, 
-        ///you need to append the reparse point data to the end of the file, and recreate the new reparse point data to the new file after you copied it to the new computer.
+        ///the encrypted information will be appended to the file as an header, 
+        ///the filter driver will know if the file was encrypted by checking the header.
         /// </summary>
         /// <param name="filterMask"></param>
         /// <param name="encryptionKeyLength"></param>
@@ -755,10 +1141,7 @@ namespace EaseFilter.CommonObjects
          byte[] encryptionKey);
 
         /// <summary>
-        ///Set an encryption folder, assume all files inside the folder were encrypted, all encrypted files use the same encryption key and IV key. 
-        ///The encryption file doesn’t embed any encryption information, you can’t tell if the file was encrypted or not by checking the file information, 
-        ///you can share or transfer the encrypted file without limitation. To check if the file was encrypted, you need to stop the encryption filter driver service, 
-        ///then open the encrypted file, you will get cipher data instead of the clear data. 
+        ///Set an encryption folder, all encrypted files use the same encryption key and IV key. 
         /// </summary>
         /// <param name="filterMask"></param>
         /// <param name="encryptionKeyLength"></param>
@@ -813,7 +1196,7 @@ namespace EaseFilter.CommonObjects
         [MarshalAs(UnmanagedType.LPWStr)]string reparseFileFilterMask);
 
         /// <summary>
-        /// only manage the IO of the filter rule for the processes in the included process list 
+        ///only manage the file IO for the processes in the included process list
         /// </summary>
         /// <param name="filterMask">the file filter mask of the filter rule</param>
         /// <param name="processName">the include process name filter mask, process name format:notepad.exe</param>
@@ -879,13 +1262,14 @@ namespace EaseFilter.CommonObjects
         [MarshalAs(UnmanagedType.LPWStr)]string userName);
 
         /// <summary>
-        /// Register the I/O event types for the filter rule, get the notification when the I/O was triggered.
+        /// Register the file changed events for the filter rule, get the notification when the I/O was triggered
+        /// after the file handle was closed.
         /// </summary>
         /// <param name="filterMask">the file filter mask of the filter rule</param>
         /// <param name="eventType">the I/O event types,reference the FileEventType enumeration.</param>
         /// <returns></returns>
         [DllImport("FilterAPI.dll", SetLastError = true)]
-        public static extern bool RegisterEventTypeToFilterRule(
+        public static extern bool RegisterFileChangedEventsToFilterRule(
         [MarshalAs(UnmanagedType.LPWStr)]string filterMask,
         uint eventType);
 
@@ -896,9 +1280,9 @@ namespace EaseFilter.CommonObjects
         /// <param name="registerIO">the specific I/Os you want to monitor</param>
         /// <returns></returns>
         [DllImport("FilterAPI.dll", SetLastError = true)]
-        public static extern bool RegisterMoinitorIOToFilterRule(
+        public static extern bool RegisterMonitorIOToFilterRule(
         [MarshalAs(UnmanagedType.LPWStr)]string filterMask,
-        uint registerIO);
+        ulong registerIO);
 
         /// <summary>
         /// Register the callback I/O for control filter driver to the filter rule, you can change, block and pass the I/O
@@ -910,26 +1294,26 @@ namespace EaseFilter.CommonObjects
         [DllImport("FilterAPI.dll", SetLastError = true)]
         public static extern bool RegisterControlIOToFilterRule(
         [MarshalAs(UnmanagedType.LPWStr)]string filterMask,
-        uint registerIO);
+        ulong registerIO);
 
         /// <summary>
-        /// Filter the register I/O, only when the file I/Os open with the filter options,the callback I/O will be triggerred
-        /// and send to the user mode service, for example you only want to get callback for the file open with write access.
+        /// Filter the I/O based on the file create options,the IO will be skipped if the filter option is not 0
+        /// and the file create options don't match the filter.
         /// </summary>
         /// <param name="filterMask">the file filter mask of the filter rule</param>
-        /// <param name="filterByDesiredAccess">if it is not 0, callback when file opens with this DesiredAccess</param>
-        /// <param name="filterByDisposition">if it is not 0, callback when file opens with this Disposition</param>
-        /// <param name="filterByCreateOptions">if it is not 0, callback when file opens with this CreateOptions</param>
+        /// <param name="filterByDesiredAccess">if it is not 0, the filter driver will check if the file creation option "DesiredAccess" matches the filter</param>
+        /// <param name="filterByDisposition">if it is not 0, the filter driver will check if the file creation option "Disposition" matches the filter</param>
+        /// <param name="filterByCreateOptions">if it is not 0, the filter driver will check if the file creation option "CreateOptions" matches the filter</param>
         /// <returns></returns>
         [DllImport("FilterAPI.dll", SetLastError = true)]
-        public static extern bool AddRegisterIOFilterToFilterRule(
+        public static extern bool AddCreateFilterToFilterRule(
         [MarshalAs(UnmanagedType.LPWStr)]string filterMask,
         uint filterByDesiredAccess,
         uint filterByDisposition,
         uint filterByCreateOptions);
 
         /// <summary>
-        /// Set the access rigths to the specific process
+        /// Set the access rights to the specific process
         /// </summary>
         /// <param name="filterMask">the file filter mask of the filter rule</param>
         /// <param name="processName">the process name will be added the access rights, e.g. notepad.exe or c:\windows\*.exe</param>
@@ -951,6 +1335,52 @@ namespace EaseFilter.CommonObjects
         public static extern bool RemoveProcessRightsFromFilterRule(
         [MarshalAs(UnmanagedType.LPWStr)]string filterMask,
         [MarshalAs(UnmanagedType.LPWStr)]string processName);
+
+        /// <summary>
+        /// Get sha256 hash of the file, you need to allocate the 32 bytes array to get the sha256 hash.
+        /// hashBytesLength is the input byte array length, and the outpou lenght of the hash.
+        /// </summary>
+        /// <param name="fileName"></param>
+        /// <param name="hashBytes"></param>
+        /// <param name="hashBytesLength"></param>
+        /// <returns></returns>
+        [DllImport("FilterAPI.dll", SetLastError = true)]
+        public static extern bool Sha256HashFile(
+            [MarshalAs(UnmanagedType.LPWStr)]string fileName,
+            byte[] hashBytes,
+            ref uint hashBytesLength);
+
+        /// <summary>
+        /// Add the access rights of the process with the sha256 hash to the filter rule.
+        /// allows you to set the access rights to your trusted process.
+        /// </summary>
+        /// <param name="filterMask">The filter rule file filter mask.</param>
+        /// <param name="imageSha256">the sha256 hash of the executable binary file.</param>
+        /// <param name="hashLength">the length of the sha256 hash, by default is 32.</param>
+        /// <param name="accessFlags">the access flags for the setting process.</param>
+        /// <returns>return true if it is succeeded.</returns>
+        [DllImport("FilterAPI.dll", SetLastError = true)]
+        public static extern bool AddSha256ProcessAccessRightsToFilterRule(
+        [MarshalAs(UnmanagedType.LPWStr)]string filterMask,
+        byte[] imageSha256,
+        uint hashLength,
+        uint accessFlags);
+
+        /// <summary>
+        /// Add the access rights of the process which was signed with the certificate to the filter rule.
+        /// allows you to set the access rights to your trusted process.
+        /// </summary>
+        /// <param name="filterMask">The filter rule file filter mask.</param>
+        /// <param name="certificateName">the subject name of the code certificate to sign the process.</param>
+        /// <param name="lengthOfCertificate">the length of the certificate name</param>
+        /// <param name="accessFlags">the access flags for the setting process.</param>
+        /// <returns>return true if it is succeeded.</returns>
+        [DllImport("FilterAPI.dll", SetLastError = true)]
+        public static extern bool AddSignedProcessAccessRightsToFilterRule(
+        [MarshalAs(UnmanagedType.LPWStr)]string filterMask,
+        [MarshalAs(UnmanagedType.LPWStr)]string certificateName,
+        uint lengthOfCertificate,
+        uint accessFlags);
 
         /// <summary>
         /// Set the access control flags to process with the processId
@@ -1000,6 +1430,7 @@ namespace EaseFilter.CommonObjects
         public static extern bool AddBooleanConfigToFilterRule(
         [MarshalAs(UnmanagedType.LPWStr)]string filterMask,
         uint booleanConfig);
+
 
         /// <summary>
         /// Remove the filter rule from the filter driver.
@@ -1083,6 +1514,11 @@ namespace EaseFilter.CommonObjects
             REG_ALLOW_UNLOAD_KEY = 0x00080000,
             REG_ALLOW_KEY_CLOSE = 0x00100000,
             REG_ALLOW_QUERY_KEYNAME = 0x00200000,
+            /// <summary>
+            /// send the registry event when registry access was blocked by the above setting,
+            /// when it was set to true.
+            /// </summary>
+            ENABLE_FILTER_SEND_DENIED_REG_EVENT = 0x80000000,
         }       
 
         /// <summary>
@@ -1190,7 +1626,8 @@ namespace EaseFilter.CommonObjects
             [MarshalAs(UnmanagedType.LPWStr)]string registryKeyNameFilterMask,
             uint accessFlag,
             ulong regCallbackClass,
-            bool isExcludeFilter);
+            bool isExcludeFilter,
+            uint filterRuleId);
 
         /// <summary>
         /// Add registry access control filter entry with process name, if process name filter mask matches the proces,
@@ -1235,6 +1672,11 @@ namespace EaseFilter.CommonObjects
             uint processNameLength,
             [MarshalAs(UnmanagedType.LPWStr)]string processName);
 
+        [DllImport("FilterAPI.dll", SetLastError = true)]
+        public static extern bool RemoveRegistryFilterRuleByRegKeyName(
+            uint registryKeyNameLength,
+            [MarshalAs(UnmanagedType.LPWStr)]string registryKeyName);
+
         //---------------Registry access control APIs END-----------------------------------
 
        //---------------Process filter APIs-----------------------------------------------
@@ -1247,6 +1689,15 @@ namespace EaseFilter.CommonObjects
             /// deny the new process creation if the flag is on
             /// </summary>
             DENY_NEW_PROCESS_CREATION = 0x00000001,
+            /// <summary>
+            /// if this flag is enabled, it will send the notification when the new process creation was blocked.	
+            /// </summary>
+            ENABLE_SEND_PROCESS_DENIED_EVENT = 0x00000002,
+            /// <summary>
+            /// send the callback reqeust before the process is going to be terminated.
+            /// you can block the process termination in the callback function.
+            /// </summary>
+            PROCESS_PRE_TERMINATION_REQUEST = 0x00000004,
             /// <summary>
             /// Get a notification when a new process is being created.
             /// </summary>
@@ -1336,9 +1787,7 @@ namespace EaseFilter.CommonObjects
         /// <param name="fileNameMask">the file name filter mask</param>
         /// <param name="monitorIOs">register the monitor IO callback if the monitor filter driver is enabled</param>
         /// <param name="controlIOs">register the control IO callback if the control filter driver is enabled</param>
-        /// <param name="filterByDesiredAccess">if it is not 0, callback when file opens with this DesiredAccess</param>
-        /// <param name="filterByDisposition">if it is not 0, callback when file opens with this Disposition</param>
-        /// <param name="filterByCreateOptions">if it is not 0, callback when file opens with this CreateOptions</param>
+        /// <param name="filterRuleId">the filterRuleId associated to the callback event</param>
         /// <returns></returns>
         [DllImport("FilterAPI.dll", SetLastError = true)]
         public static extern bool AddFileCallbackIOToProcessByName(
@@ -1346,11 +1795,9 @@ namespace EaseFilter.CommonObjects
         [MarshalAs(UnmanagedType.LPWStr)]string processNameMask,
         uint fileNameMaskLength,
         [MarshalAs(UnmanagedType.LPWStr)]string fileNameMask,
-        uint monitorIO,
-        uint controlIO,
-        uint filterByDesiredAccess,
-        uint filterByDisposition,
-        uint filterByCreateOptions);
+        ulong monitorIO,
+        ulong controlIO,
+        uint filterRuleId );
 
         /// <summary>
         /// This is the API to add the file access rights of the specific files to the specific processes by process Id
@@ -1401,16 +1848,47 @@ namespace EaseFilter.CommonObjects
         [DllImport("FilterAPI.dll", SetLastError = true)]
         public static extern bool RemoveBlockSaveAsProcessId(uint processId);
 
+        /// <summary>
+        /// Get the subject name of the certificate which the process was signed 
+        /// </summary>
+        /// <param name="processName">the signed process name</param>
+        /// <param name="certificateSubjectName">the subject name of the certificate</param>
+        /// <param name="sizeOfCertificateSubjectName">the size of the subject name</param>
+        /// <param name="signedTime">the signed time</param>
+        /// <returns>return true if the process was signed correctly, or return false.</returns>
+        [DllImport("FilterAPI.dll", SetLastError = true)]
+        public static extern bool GetSignerInfo(
+        [MarshalAs(UnmanagedType.LPWStr)]string processName,
+        [MarshalAs(UnmanagedType.LPWStr)]string certificateSubjectName,
+        ref uint sizeOfCertificateSubjectName,
+        ref long signedTime);
+
         //---------------Process filter APIs   END-----------------------------------------------
 
         [DllImport("FilterAPI.dll", SetLastError = true)]
         public static extern bool RegisterIoRequest(uint requestRegistration);
 
+        /// <summary>
+        /// Open file bypass the filter driver and security check here.
+        /// </summary>
+        /// <param name="fileName"></param>
+        /// <param name="dwDesiredAccess"></param>
+        /// <param name="fileHandle"></param>
+        /// <returns></returns>
         [DllImport("FilterAPI.dll", SetLastError = true)]
         public static extern bool GetFileHandleInFilter(
              [MarshalAs(UnmanagedType.LPWStr)]string fileName,
              uint dwDesiredAccess,
              ref IntPtr fileHandle);
+
+        /// <summary>
+        /// Close the file handle which was opened by GetFileHandleInFilter.
+        /// </summary>
+        /// <param name="fileHandle"></param>
+        /// <returns></returns>
+        [DllImport("FilterAPI.dll", SetLastError = true)]
+        public static extern bool CloseFileHandleInFilter(
+             IntPtr fileHandle);
 
         [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         public static extern bool ConvertSidToStringSid(
@@ -1423,55 +1901,18 @@ namespace EaseFilter.CommonObjects
         [DllImport("kernel32", SetLastError = true)]
         public static extern uint GetCurrentProcessId();
 
-        [DllImport("Kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        public static extern int QueryDosDeviceW(
-        [MarshalAs(UnmanagedType.LPWStr)]string dosName,
-        [MarshalAs(UnmanagedType.LPWStr)]ref string volumeName,
-        int volumeNameLength);
-
         [DllImport("FilterAPI.dll", SetLastError = true)]
-        private static extern bool CreateFileAPI(
+        public static extern bool CreateFileAPI(
              [MarshalAs(UnmanagedType.LPWStr)]string fileName,
               uint dwDesiredAccess,
               uint dwShareMode,
               uint dwCreationDisposition,
               uint dwFlagsAndAttributes,
-              ref IntPtr fileHandle);
-
-        [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-        private static extern bool SetFileTime(SafeFileHandle hFile,
-                                        [In] ref long lpCreationTime,
-                                        [In] ref long lpLastAccessTime,
-                                        [In] ref long lpLastWriteTime);
+              ref IntPtr fileHandle);    
+   
 
         [DllImport("FilterAPI.dll", SetLastError = true)]
-        private static extern bool CreateStubFile(
-             [MarshalAs(UnmanagedType.LPWStr)]string fileName,
-             long fileSize,  //if it is 0 and the file exist,it will use the current file size.
-              uint fileAttributes, //if it is 0 and the file exist, it will use the current file attributes.
-              uint tagDataLength, //if it is 0, then no reparsepoint will be created.
-              IntPtr tagData,
-              bool overwriteIfExist,
-              ref IntPtr fileHandle);
-
-        [DllImport("FilterAPI.dll", SetLastError = true)]
-        public static extern bool OpenStubFile(
-            [MarshalAs(UnmanagedType.LPWStr)]string fileName,
-             FileAccess access,
-             FileShare share,
-             ref IntPtr fileHandle);
-
-        [DllImport("FilterAPI.dll", SetLastError = true)]
-        private static extern bool QueryAllocatedRanges(
-                IntPtr fileHandle,
-                long queryOffset,
-                long queryLength,
-                IntPtr allocatedRangesBuffer,
-                int allocatedRangesBufferSize,
-                ref uint returnedLength);
-
-        [DllImport("FilterAPI.dll", SetLastError = true)]
-        private static extern bool AESEncryptDecryptBuffer(
+        public static extern bool AESEncryptDecryptBuffer(
                 IntPtr inputBuffer,
                 IntPtr outputBuffer,
                 uint bufferLength,
@@ -1519,28 +1960,20 @@ namespace EaseFilter.CommonObjects
              uint ivLength,
              byte[] iv,
              uint tagDataLength,
-             byte[] tagData);   
+             byte[] tagData);
 
-        [DllImport("FilterAPI.dll", SetLastError = true)]
-        public static extern bool AESDecryptFile(
-             [MarshalAs(UnmanagedType.LPWStr)]string fileName,
-             uint keyLength,
-             byte[] encryptionKey,
-             uint ivLength,
-             byte[] iv);
-
-         /// <summary>
+        /// <summary>
         /// Encrypt the source file to the dest file, if addIVTag is true then the iv data will be embedded to the encrypted file,
         /// or there are no meta data attached.
-         /// </summary>
-         /// <param name="sourceFileName"></param>
-         /// <param name="destFileName"></param>
-         /// <param name="keyLength"></param>
-         /// <param name="encryptionKey"></param>
-         /// <param name="ivLength"></param>
-         /// <param name="iv"></param>
-         /// <param name="addIVTag"></param>
-         /// <returns></returns>
+        /// </summary>
+        /// <param name="sourceFileName"></param>
+        /// <param name="destFileName"></param>
+        /// <param name="keyLength"></param>
+        /// <param name="encryptionKey"></param>
+        /// <param name="ivLength"></param>
+        /// <param name="iv"></param>
+        /// <param name="addIVTag"></param>
+        /// <returns></returns>
         [DllImport("FilterAPI.dll", SetLastError = true)]
         public static extern bool AESEncryptFileToFile(
              [MarshalAs(UnmanagedType.LPWStr)]string sourceFileName,
@@ -1575,6 +2008,15 @@ namespace EaseFilter.CommonObjects
              byte[] tagData);   
 
         [DllImport("FilterAPI.dll", SetLastError = true)]
+        public static extern bool AESDecryptFile(
+             [MarshalAs(UnmanagedType.LPWStr)]string fileName,
+             uint keyLength,
+             byte[] encryptionKey,
+             uint ivLength,
+             byte[] iv);
+         
+
+        [DllImport("FilterAPI.dll", SetLastError = true)]
         public static extern bool AESDecryptFileToFile(
              [MarshalAs(UnmanagedType.LPWStr)]string sourceFileName,
              [MarshalAs(UnmanagedType.LPWStr)]string destFileName,
@@ -1584,31 +2026,32 @@ namespace EaseFilter.CommonObjects
              byte[] iv);
 
         /// <summary>
-        /// Set the AES Data to the encrypted file
+        /// Decrypt the encrypted file at offset and length to a buffer array.
         /// </summary>
-        /// <param name="fileName">the encrypted file name</param>
-        /// <param name="headerSize">the size of the AESData</param>
-        /// <param name="header">the AESData structure</param>
+        /// <param name="encryptedFileName">The encrypted file name</param>
+        /// <param name="keyLength">the number of the bytes of the encryption key</param>
+        /// <param name="encryptionKey">the encryption key byte array</param>
+        /// <param name="ivLength">the lenght of the iv key, set it to 0 if the AES header was embedded.</param>
+        /// <param name="iv">the iv key, set it to null if the AES header was embedded.</param>
+        /// <param name="offset">the offset which the decryption will start</param>
+        /// <param name="bytesToDecrypt">the number of bytes to decrypt</param>
+        /// <param name="decryptedBuffer">the decrypted buffer array to receive the decrypted data, 
+        /// the buffer size must be greater or equal than the bytesToDecrypt</param>
+        /// <param name="bytesDecrypted">the length of the return decrytped buffer</param>
         /// <returns></returns>
-         [DllImport("FilterAPI.dll", SetLastError = true)]
-         public static extern bool AddAESHeader(
-             [MarshalAs(UnmanagedType.LPWStr)]string fileName,
-             uint headerSize,
-             byte[] header);
+        [DllImport("FilterAPI.dll", SetLastError = true)]
+        public static extern bool AESDecryptBytes(
+             [MarshalAs(UnmanagedType.LPWStr)]string encryptedFileName,
+             uint keyLength,
+             byte[] encryptionKey,
+             uint ivLength,
+             byte[] iv,
+             long offset,
+             int bytesToDecrypt,
+             byte[] decryptedBuffer,
+             ref int bytesDecrypted);
 
-          /// <summary>
-        /// get the AES Data from the encrypted file
-        /// </summary>
-        /// <param name="fileName">the encrypted file name</param>
-        /// <param name="headerSize">the size of the AESData</param>
-        /// <param name="header">the byte array to store the AESData structure</param>
-        /// <returns></returns>
-         [DllImport("FilterAPI.dll", SetLastError = true)]
-         public static extern bool GetAESHeader(
-             [MarshalAs(UnmanagedType.LPWStr)]string fileName,
-             ref uint headerSize, 
-             byte[] header);
-
+  
         /// <summary>
         /// Set the AESFlags and AccessFlags in the AES header
         /// </summary>
@@ -1622,410 +2065,35 @@ namespace EaseFilter.CommonObjects
              uint accessFlags );
 
         /// <summary>
-        /// Set the tag data which was set in the AES header
+        /// Get the tag data which was set in the AES header
         /// </summary>
         /// <returns></returns>
         [DllImport("FilterAPI.dll", SetLastError = true)]
         public static extern bool GetAESTagData(
             [MarshalAs(UnmanagedType.LPWStr)]string fileName,
             ref uint tagDataSize,
-             byte[] tagData);
+            byte[] tagData);
 
+        /// <summary>
+        /// Get the IV data from an encrypted file's header
+        /// </summary>
+        /// <param name="fileName">the encrypted file name</param>
+        /// <param name="ivSize">the pass in/out iv buffer size</param>
+        /// <param name="ivBuffer">the iv buffer</param>
+        /// <returns>return true if it gets the right iv data</returns>
         [DllImport("FilterAPI.dll", SetLastError = true)]
-        public static extern bool AddReparseTagData(
+        public static extern bool GetAESIV(
             [MarshalAs(UnmanagedType.LPWStr)]string fileName,
-            int tagDataLength,
-            IntPtr tagData);
-
-        [DllImport("FilterAPI.dll", SetLastError = true)]
-        public static extern bool RemoveTagData(
-              IntPtr fileHandle);
-
-        [DllImport("FilterAPI.dll", SetLastError = true)]
-        public static extern bool AddTagData(
-              IntPtr fileHandle,
-              int tagDataLength,
-              IntPtr tagData);
-
-        public static bool EmbedDRPolicyDataToFile(
-              string fileName,
-              byte[] drPolicyData,
-              out string lastError )
-        {
-
-            bool ret = false;
-            lastError = string.Empty;
-
-            try
-            {              
-                GCHandle pinnedArray = GCHandle.Alloc(drPolicyData, GCHandleType.Pinned);
-                IntPtr pointer = pinnedArray.AddrOfPinnedObject();
-
-                ret = AddReparseTagData(fileName, drPolicyData.Length, pointer);
-
-                pinnedArray.Free();
-
-                if (!ret)
-                {
-                    lastError = GetLastErrorMessage();
-                }
-            }
-            catch (Exception ex)
-            {
-                ret = false;
-                lastError = ex.Message;
-            }
-          
-            return ret;
-
-        }
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        public static extern bool CloseHandle(IntPtr handle);
+            ref uint ivSize,
+            byte[] ivBuffer);
 
         /// <summary>
-        /// Return true if it succeeds to check the iv tag, if ivLenght > 0, it returns ivTag, or there are no ivTag data.
+        /// Get the computerId 
         /// </summary>
-        /// <param name="fileName"></param>
-        /// <param name="ivLength"></param>
-        /// <param name="iv"></param>
         /// <returns></returns>
         [DllImport("FilterAPI.dll", SetLastError = true)]
-        private static extern bool GetIVTag(
-             [MarshalAs(UnmanagedType.LPWStr)]string fileName,
-             ref uint ivLength,
-             IntPtr iv,
-             ref uint aesFlag);
-
-        /// <summary>
-        /// the buffer length has to be 36 or more.
-        /// </summary>
-        /// <param name="outputBuffer"></param>
-        /// <param name="outputBufferLength"></param>
-        /// <returns></returns>
-        [DllImport("FilterAPI.dll", SetLastError = true)]
-        public static extern bool GetUniqueComputerId(
-                IntPtr outputBuffer,
-                ref uint outputBufferLength);
-
-        [DllImport("FilterAPI.dll", SetLastError = true)]
-        public static extern bool ActivateLicense(
-                IntPtr outputBuffer,
-                uint outputBufferLength);
-
-        public enum EncryptType
-        {
-            Decryption = 0,
-            Encryption ,
-        }
-
-        public static bool GetUniqueComputerId(ref string myComputerId,ref string lastError)
-        {
-            bool retVal = false;
-            byte[] computerId = new byte[52];
-            GCHandle gcHandle = GCHandle.Alloc(computerId, GCHandleType.Pinned);
-
-            try
-            {
-                uint computerIdLength = (uint)computerId.Length;
-                IntPtr computerIdPtr = Marshal.UnsafeAddrOfPinnedArrayElement(computerId, 0);
-                retVal = FilterAPI.GetUniqueComputerId(computerIdPtr, ref computerIdLength);
-
-                if (!retVal || computerIdLength <= 0)
-                {
-                    lastError = GetLastErrorMessage();
-                    return false;
-                }
-
-                Array.Resize(ref computerId, (int)computerIdLength);
-                myComputerId = UnicodeEncoding.Unicode.GetString(computerId);
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                lastError = "Get computerId got exception,system return error:" + ex.Message;
-                return false;
-            }
-            finally
-            {
-                gcHandle.Free();
-            }
-
-        }
-
-        /// <summary>
-        /// To open encrypted file without the filter driver interception, read the raw data with the return file handle.
-        /// The caller is reponsible to close the file handle.
-        /// </summary>
-        /// <param name="fileName"></param>
-        /// <param name="fileHandle"></param>
-        /// <param name="lastError"></param>
-        /// <returns></returns>
-        public static bool OpenRawEnCyptedFile(string fileName, out IntPtr fileHandle, out string lastError)
-        {
-            fileHandle = IntPtr.Zero;
-            lastError = string.Empty;
-            uint bypassFilterFileAttributes = FILE_FLAG_OPEN_REPARSE_POINT|FILE_FLAG_OPEN_NO_RECALL|FILE_FLAG_NO_BUFFERING|FILE_ATTRIBUTE_REPARSE_POINT;
-
-            try
-            {               
-                if (!CreateFileAPI(fileName, (uint)FileAccess.Read, (uint)FileShare.None, (uint)FileMode.Open, bypassFilterFileAttributes, ref fileHandle))
-                {
-                    lastError = FilterAPI.GetLastErrorMessage();
-                    return false;
-                }
-            }
-            catch (Exception ex)
-            {
-                lastError = "OpenRawEnCyptedFile " + fileName + " got exception,system return error:" + ex.Message;
-                return false;
-            }
-
-            return true;
-        }
-
-
-        //public static bool GetIVTag(string fileName, ref byte[] iv,ref uint aesFlag, out string lastError)
-        //{
-        //    bool ret = false;
-        //    IntPtr tagPtr = IntPtr.Zero;
-        //    uint ivLength = 16;
-
-        //    lastError = string.Empty;
-
-        //    tagPtr = Marshal.AllocHGlobal((int)ivLength);
-        //    ret = GetIVTag(fileName, ref ivLength, tagPtr, ref aesFlag);
-
-        //    if (!ret)
-        //    {
-        //        lastError = GetLastErrorMessage();
-        //    }
-        //    else if (ivLength > 0)
-        //    {
-        //        iv = new byte[ivLength];
-        //        Marshal.Copy(tagPtr, iv, 0, (int)ivLength);
-        //    }
-        //    else
-        //    {
-        //        iv = new byte[0]; ;
-        //    }
-
-        //    if (tagPtr != IntPtr.Zero)
-        //    {
-        //        Marshal.FreeHGlobal(tagPtr);
-        //    }
-
-        //    return ret;
-        //}
-
-
+        public static extern uint GetComputerId();
    
-        public static string AESEncryptDecryptStr(string inStr, EncryptType encryptType)
-        {
-           
-            if (string.IsNullOrEmpty(inStr))
-            {
-               return string.Empty;
-            }
-
-            byte[] inbuffer = null;
-
-            if (encryptType == EncryptType.Encryption)
-            {
-                inbuffer = ASCIIEncoding.UTF8.GetBytes(inStr);
-            }
-            else if (encryptType == EncryptType.Decryption)
-            {
-                inbuffer = Convert.FromBase64String(inStr);
-            }
-            else
-            {
-                throw new Exception("Failed to encrypt decrypt string, the encryptType " + encryptType.ToString() + " doesn't know.");
-            }
-
-            byte[] outBuffer = new byte[inbuffer.Length];
-
-            GCHandle gcHandleIn = GCHandle.Alloc(inbuffer, GCHandleType.Pinned);
-            GCHandle gcHandleOut = GCHandle.Alloc(outBuffer, GCHandleType.Pinned);
-
-            IntPtr inBufferPtr = Marshal.UnsafeAddrOfPinnedArrayElement(inbuffer, 0);
-            IntPtr outBufferPtr = Marshal.UnsafeAddrOfPinnedArrayElement(outBuffer, 0);
-
-            try
-            {
-                bool retVal = AESEncryptDecryptBuffer(inBufferPtr, outBufferPtr, (uint)inbuffer.Length, 0, null, 0, null, 0);
-
-                if (encryptType == EncryptType.Encryption)
-                {
-                    return Convert.ToBase64String(outBuffer);
-                }
-                else //if (encryptType == EncryptType.Decryption)
-                {
-                    return ASCIIEncoding.UTF8.GetString(outBuffer);
-                }
-            }
-            finally
-            {
-                gcHandleIn.Free();
-                gcHandleOut.Free();
-            }
-
-        }
-
-    
-        public static void AESEncryptDecryptBuffer(byte[] inbuffer, long offset, byte[] key, byte[] IV)
-        {
-            if (null == inbuffer || inbuffer.Length == 0)
-            {
-                throw new Exception("Failed to encrypt decrypt buffer, the input buffer can't be null");
-            }
-
-            GCHandle gcHandle = GCHandle.Alloc(inbuffer, GCHandleType.Pinned);
-
-            try
-            {
-                IntPtr inBufferPtr = Marshal.UnsafeAddrOfPinnedArrayElement(inbuffer, 0);
-
-                uint keyLength = 0;
-                uint IVLength = 0;
-
-                if (key != null)
-                {
-                    keyLength = (uint)key.Length;
-                }
-
-                if (IV != null)
-                {
-                    IVLength = (uint)IV.Length;
-                }
-
-
-                bool retVal = AESEncryptDecryptBuffer(inBufferPtr, inBufferPtr, (uint)inbuffer.Length, offset, key, keyLength, IV, IVLength);
-
-                if (!retVal)
-                {
-                    throw new Exception("Failed to encrypt buffer, return error:" + GetLastErrorMessage());
-                }
-            }
-            finally
-            {
-                gcHandle.Free();
-            }
-
-            return ;
-        }
-
-        public static bool DecodeUserName(byte[]sid, out string userName)
-        {
-            bool ret = true;
-
-            IntPtr sidStringPtr = IntPtr.Zero;
-            string sidString = string.Empty;
-
-            userName = string.Empty;
-            
-            try
-            {
-               
-                IntPtr sidBuffer = Marshal.UnsafeAddrOfPinnedArrayElement(sid, 0);
-
-                if (FilterAPI.ConvertSidToStringSid(sidBuffer, out sidStringPtr))
-                {
-
-                    sidString = Marshal.PtrToStringAuto(sidStringPtr);
-
-                    lock (userNameTable)
-                    {
-                        //check the user name cache table
-                        if (userNameTable.ContainsKey(sidString))
-                        {
-                            userName = userNameTable[sidString];
-                            return ret;
-                        }
-                    }
-
-                    try
-                    {
-                        SecurityIdentifier secIdentifier = new SecurityIdentifier(sidString);
-                        IdentityReference reference = secIdentifier.Translate(typeof(NTAccount));
-                        userName = reference.Value;
-                    }
-                    catch
-                    {
-                    }
-
-                    lock (userNameTable)
-                    {
-                        //check the user name cache table
-                        if (!userNameTable.ContainsKey(sidString))
-                        {
-                            userNameTable.Add(sidString, userName);
-                        }
-                    }
-                }
-                else
-                {
-                    string errorMessage = "Convert sid to sid string failed with error " + Marshal.GetLastWin32Error();
-                    Console.WriteLine(errorMessage);
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(string.Format("Convert sid to user name got exception:{0}", ex.Message));
-                ret = false;
-
-            }
-            finally
-            {
-                if (sidStringPtr != null && sidStringPtr != IntPtr.Zero)
-                {
-                    FilterAPI.LocalFree(sidStringPtr);
-                }
-            }
-
-            return ret;
-        }
-
-        public static bool DecodeProcessName(uint processId, out string processName)
-        {
-            bool ret = true;
-            processName = string.Empty;
-
-
-            //this is the optimization of the process to get the process name from the process Id
-            //it is not reliable for this process, since the process Id is reuasble when the process was ternmiated.
-            lock (processNameTable)
-            {
-                if (processNameTable.ContainsKey(processId))
-                {
-                    processName = processNameTable[processId];
-                    return true;
-                }
-            }
-
-            try
-            {
-                System.Diagnostics.Process requestProcess = System.Diagnostics.Process.GetProcessById((int)processId);
-                processName = requestProcess.ProcessName;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(string.Format("Convert pid to process name got exception:{0}", ex.Message));
-                ret = false;
-            }
-
-            lock (processNameTable)
-            {
-                if (!processNameTable.ContainsKey(processId))
-                {
-                    processNameTable.Add(processId,processName);
-                }
-            }
-
-            return ret;
-        }
-
 
         public static string GetLastErrorMessage()
         {
@@ -2047,138 +2115,6 @@ namespace EaseFilter.CommonObjects
             }
 
             return lastError;
-        }
-
-        static bool IsDriverChanged()
-        {
-            bool ret = false;
-
-            try
-            {
-                System.Reflection.Assembly assembly = System.Reflection.Assembly.GetEntryAssembly();
-                string localPath = Path.GetDirectoryName(assembly.Location);
-                string driverName = Path.Combine(localPath, "EaseFlt.sys");
-
-                if (File.Exists(driverName))
-                {
-                    string driverInstalledPath = Path.Combine(Environment.SystemDirectory, "drivers\\easeflt.sys");
-
-                    if (File.Exists(driverInstalledPath))
-                    {
-                        FileInfo fsInstalled = new FileInfo(driverInstalledPath);
-                        FileInfo fsToInstall = new FileInfo(driverName);
-
-                        if (fsInstalled.LastWriteTime < fsToInstall.LastWriteTime)
-                        {
-                            //it needs to install new the driver.
-                            return true;
-                        }
-                    }
-                    else
-                    {
-                        return true;
-                    }
-                }
-
-            }
-            catch (Exception ex)
-            {
-                ret = false;
-
-                EventManager.WriteMessage(630, "IsDriverChanged", EventLevel.Error, "Check IsDriverChanged failed with error:" + ex.Message);
-            }
-
-            return ret;
-        }
-
-        static public bool StartFilter(int threadCount, string registerKey,FilterDelegate filterCallback, DisconnectDelegate disconnectCallback,ref string lastError)
-        {
-          
-            bool ret = true;
-
-            try
-            {
-                if (IsDriverChanged() || !FilterAPI.IsDriverServiceRunning())
-                {
-                    //uninstall or install driver needs the Admin permission.
-
-                    FilterAPI.UnInstallDriver();
-
-                    //wait for 3 seconds for the uninstallation completed.
-                    System.Threading.Thread.Sleep(3000);
-
-                    ret = FilterAPI.InstallDriver();
-                    if (!ret)
-                    {
-                        lastError = "Installed driver failed with error:" + FilterAPI.GetLastErrorMessage();
-                        return false;
-                    }
-                    else
-                    {
-                        isFilterStarted = false;
-                        EventManager.WriteMessage(59, "InstallDriver", EventLevel.Information, "Install filter driver succeeded.");
-                    }
-                }
-
-
-                if (!isFilterStarted)
-                {
-
-                    if (!SetRegistrationKey(registerKey))
-                    {
-                        lastError = "Set registration key failed with error:" + GetLastErrorMessage();
-                        return false;
-                    }
-
-                    gchFilter = GCHandle.Alloc(filterCallback);
-                    IntPtr filterCallbackPtr = Marshal.GetFunctionPointerForDelegate(filterCallback);
-
-                    gchDisconnect = GCHandle.Alloc(disconnectCallback);
-                    IntPtr disconnectCallbackPtr = Marshal.GetFunctionPointerForDelegate(disconnectCallback);
-
-                    isFilterStarted = RegisterMessageCallback(threadCount, filterCallbackPtr, disconnectCallbackPtr);
-                    if (!isFilterStarted)
-                    {
-                        lastError = "RegisterMessageCallback failed with error:" + GetLastErrorMessage();
-                        return false;
-                    }
-
-                    ret = true;
-
-                }
-            }
-            catch (Exception ex)
-            {
-                ret = false;
-                lastError = "Start filter failed with error " + ex.Message;
-            }
-            finally
-            {
-                if (!ret)
-                {
-                    lastError = lastError + " Make sure you run this application as administrator.";
-                }
-            }
-
-            return ret;
-        }
-
-        static public void StopFilter()
-        {
-            if (isFilterStarted)
-            {
-                Disconnect();
-                gchFilter.Free();
-                gchDisconnect.Free();
-                isFilterStarted = false;
-            }
-
-            return;
-        }
-
-        static public bool IsFilterStarted
-        {
-            get { return isFilterStarted; }
         }
 
     }

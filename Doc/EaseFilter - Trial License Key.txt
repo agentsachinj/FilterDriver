@@ -1,0 +1,31 @@
+EaseFilter
+
+Here is the trial license key for you:
+11542-941E5-86503-C186E-CBEC0-66A50
+
+You need to get an activated license key for your test computer with below link:
+https://www.easefilter.com/activateTrialLicense.aspx
+
+
+ComputerId: 161582 (VM)
+Enter your register name( first name and last name): Sachin Jegaonkar
+Please enter your register email address: sachin.j@datanchor.io
+Please enter your license key: 11542-941E5-86503-C186E-CBEC0-66A50
+
+
+Activate license succeeded, please copy the below license as your registration key:
+
+11542-941E5-86503-C186E-C8EC0-63A09-0BB1F-142
+
+----------------------
+
+test Install filter driver succeeded!before Install filter driver succeeded!after Install filter driver succeeded!
+
+Start Encryption for folder C:\Testing\EaseFilter\Encrypt\*,
+The new created file will be encrypted, the encrypted file can be decrypted automatically in this folder               .
+ Press any key to stop the filter driver.
+Press any key to continue . . .
+5
+Stop Filter Service.
+
+----------------------

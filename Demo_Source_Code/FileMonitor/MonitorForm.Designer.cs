@@ -1,7 +1,45 @@
-﻿namespace FileMonitor
+﻿using System;
+using System.Windows.Forms;
+using System.Runtime.InteropServices;
+using System.IO;
+using System.Threading;
+
+namespace FileMonitor
 {
+    public class FastListView : ListView
+    {
+        [StructLayout(LayoutKind.Sequential)]
+        private struct NMHDR
+        {
+            public IntPtr hwndFrom;
+            public uint idFrom;
+            public uint code;
+        }
+
+        private const uint NM_CUSTOMDRAW = unchecked((uint)-12);
+
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == 0x204E)
+            {
+                NMHDR hdr = (NMHDR)m.GetLParam(typeof(NMHDR));
+                if (hdr.code == NM_CUSTOMDRAW)
+                {
+                    m.Result = (IntPtr)0;
+                    return;
+                }
+            }
+
+            base.WndProc(ref m);
+        }
+    }
+
     partial class MonitorForm
     {
+        [DllImport("user32")]
+        private static extern bool SendMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
+        private uint LVM_SETTEXTBKCOLOR = 0x1026;
+
         /// <summary>
         /// Required designer variable.
         /// </summary>
@@ -44,9 +82,8 @@
             this.toolStripButton1 = new System.Windows.Forms.ToolStripButton();
             this.toolStripSeparator5 = new System.Windows.Forms.ToolStripSeparator();
             this.toolStripButton_UnitTest = new System.Windows.Forms.ToolStripButton();
-            this.toolStripButton_TestTool = new System.Windows.Forms.ToolStripButton();
-            this.listView_Info = new System.Windows.Forms.ListView();
             this.toolStripButton_Help = new System.Windows.Forms.ToolStripButton();
+            this.listView_Info = new FileMonitor.FastListView();
             this.menuStrip1.SuspendLayout();
             this.toolStrip1.SuspendLayout();
             this.SuspendLayout();
@@ -90,7 +127,6 @@
             this.toolStripButton1,
             this.toolStripSeparator5,
             this.toolStripButton_UnitTest,
-            this.toolStripButton_TestTool,
             this.toolStripButton_Help});
             this.toolStrip1.Location = new System.Drawing.Point(0, 24);
             this.toolStrip1.Name = "toolStrip1";
@@ -173,18 +209,18 @@
             this.toolStripButton_UnitTest.Image = ((System.Drawing.Image)(resources.GetObject("toolStripButton_UnitTest.Image")));
             this.toolStripButton_UnitTest.ImageTransparentColor = System.Drawing.Color.Magenta;
             this.toolStripButton_UnitTest.Name = "toolStripButton_UnitTest";
-            this.toolStripButton_UnitTest.Size = new System.Drawing.Size(105, 22);
-            this.toolStripButton_UnitTest.Text = "Monitor Demo";
+            this.toolStripButton_UnitTest.Size = new System.Drawing.Size(113, 22);
+            this.toolStripButton_UnitTest.Text = "MonitorUnitTest";
             this.toolStripButton_UnitTest.Click += new System.EventHandler(this.toolStripButton_UnitTest_Click);
             // 
-            // toolStripButton_TestTool
+            // toolStripButton_Help
             // 
-            this.toolStripButton_TestTool.Image = ((System.Drawing.Image)(resources.GetObject("toolStripButton_TestTool.Image")));
-            this.toolStripButton_TestTool.ImageTransparentColor = System.Drawing.Color.Magenta;
-            this.toolStripButton_TestTool.Name = "toolStripButton_TestTool";
-            this.toolStripButton_TestTool.Size = new System.Drawing.Size(110, 22);
-            this.toolStripButton_TestTool.Text = "File IO Test Tool";
-            this.toolStripButton_TestTool.Click += new System.EventHandler(this.toolStripButton_TestTool_Click);
+            this.toolStripButton_Help.Image = ((System.Drawing.Image)(resources.GetObject("toolStripButton_Help.Image")));
+            this.toolStripButton_Help.ImageTransparentColor = System.Drawing.Color.Magenta;
+            this.toolStripButton_Help.Name = "toolStripButton_Help";
+            this.toolStripButton_Help.Size = new System.Drawing.Size(52, 22);
+            this.toolStripButton_Help.Text = "Help";
+            this.toolStripButton_Help.Click += new System.EventHandler(this.toolStripButton_Help_Click);
             // 
             // listView_Info
             // 
@@ -199,15 +235,6 @@
             this.listView_Info.TabIndex = 2;
             this.listView_Info.UseCompatibleStateImageBehavior = false;
             this.listView_Info.View = System.Windows.Forms.View.Details;
-            // 
-            // toolStripButton_Help
-            // 
-            this.toolStripButton_Help.Image = ((System.Drawing.Image)(resources.GetObject("toolStripButton_Help.Image")));
-            this.toolStripButton_Help.ImageTransparentColor = System.Drawing.Color.Magenta;
-            this.toolStripButton_Help.Name = "toolStripButton_Help";
-            this.toolStripButton_Help.Size = new System.Drawing.Size(129, 22);
-            this.toolStripButton_Help.Text = "Programming Help";
-            this.toolStripButton_Help.Click += new System.EventHandler(this.toolStripButton_Help_Click);
             // 
             // MonitorForm
             // 
@@ -238,7 +265,7 @@
         private System.Windows.Forms.ToolStripButton toolStripButton_StartFilter;
         private System.Windows.Forms.ToolStripButton toolStripButton_Stop;
         private System.Windows.Forms.ToolStripButton toolStripButton_ClearMessage;
-        private System.Windows.Forms.ListView listView_Info;
+        private FastListView listView_Info;
         private System.Windows.Forms.ToolStripMenuItem optionsToolStripMenuItem;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator1;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator2;
@@ -249,7 +276,6 @@
         private System.Windows.Forms.ToolStripButton toolStripButton_LoadMessage;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator5;
         private System.Windows.Forms.ToolStripButton toolStripButton_UnitTest;
-        private System.Windows.Forms.ToolStripButton toolStripButton_TestTool;
         private System.Windows.Forms.ToolStripButton toolStripButton_Help;
     }
 }

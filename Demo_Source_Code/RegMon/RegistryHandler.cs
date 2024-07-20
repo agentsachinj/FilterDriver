@@ -24,7 +24,10 @@ using System.Drawing;
 using System.Windows.Forms;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
+using System.Security.Principal;
+using System.Threading;
 
+using EaseFilter.FilterControl;
 using EaseFilter.CommonObjects;
 
 namespace RegMon
@@ -209,581 +212,376 @@ namespace RegMon
 
     public class RegistryHandler
     {
+        ListView listView_Info = null;
+        Thread messageThread = null;
+        Queue<RegistryEventArgs> messageQueue = new Queue<RegistryEventArgs>();
 
-        public static string FormatDescription(FilterAPI.MessageSendData messageSend)
+        AutoResetEvent autoEvent = new AutoResetEvent(false);
+        bool disposed = false;
+
+
+        public void InitListView()
         {
-            string descrption = string.Empty;
-            FilterAPI.RegCallbackClass regCallbackClass = (FilterAPI.RegCallbackClass)messageSend.Offset;
+            listView_Info.Clear();		//clear control
+            //create column header for ListView
+            listView_Info.Columns.Add("#", 40, System.Windows.Forms.HorizontalAlignment.Left);
+            listView_Info.Columns.Add("Time", 100, System.Windows.Forms.HorizontalAlignment.Left);
+            listView_Info.Columns.Add("UserName", 150, System.Windows.Forms.HorizontalAlignment.Left);
+            listView_Info.Columns.Add("ProcessName(PID)", 100, System.Windows.Forms.HorizontalAlignment.Left);
+            listView_Info.Columns.Add("ThreadId", 60, System.Windows.Forms.HorizontalAlignment.Left);
+            listView_Info.Columns.Add("RegCallbackClassName", 160, System.Windows.Forms.HorizontalAlignment.Left);
+            listView_Info.Columns.Add("KeyName", 300, System.Windows.Forms.HorizontalAlignment.Left);
+            listView_Info.Columns.Add("Return Status", 100, System.Windows.Forms.HorizontalAlignment.Left);
+            listView_Info.Columns.Add("Description", 400, System.Windows.Forms.HorizontalAlignment.Left);
+        }
 
-            try
+        public RegistryHandler(ListView lvMessage)
+        {
+            this.listView_Info = lvMessage;
+            InitListView();
+
+            messageThread = new Thread(new ThreadStart(ProcessMessage));
+            messageThread.Name = "ProcessMessage";
+            messageThread.Start();
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        private void Dispose(bool disposing)
+        {
+            if (!this.disposed)
             {
-
-                if (messageSend.Status != (uint)FilterAPI.NTSTATUS.STATUS_SUCCESS)
-                {
-                    return "";
-                }
-
-                switch (regCallbackClass)
-                {
-                    case FilterAPI.RegCallbackClass.Reg_Pre_Delete_Key:
-                    case FilterAPI.RegCallbackClass.Reg_Post_Delete_Key:
-                        {
-                            descrption = "registry key is being deleted.";
-                            break;
-                        }
-                    case FilterAPI.RegCallbackClass.Reg_Pre_Set_Value_Key:
-                    case FilterAPI.RegCallbackClass.Reg_Post_Set_Value_Key:
-                        {
-                            VALUE_DATA_TYPE valueType = (VALUE_DATA_TYPE)messageSend.InfoClass;
-                            descrption = "Type:" + valueType.ToString();
-                            descrption += " Data:" + ValueTypeData(valueType, (int)messageSend.DataBufferLength, messageSend.DataBuffer);
-                            break;
-                        }
-                    case FilterAPI.RegCallbackClass.Reg_Pre_Delete_Value_Key:
-                    case FilterAPI.RegCallbackClass.Reg_Post_Delete_Value_Key:
-                        {
-                            descrption = "registry key's value is being deleted.";
-                            break;
-                        }
-                    case FilterAPI.RegCallbackClass.Reg_Pre_SetInformation_Key:
-                    case FilterAPI.RegCallbackClass.Reg_Post_SetInformation_Key:
-                        {
-                            KEY_SET_INFORMATION_CLASS keySetInformationClass = (KEY_SET_INFORMATION_CLASS)messageSend.InfoClass;
-                            descrption = keySetInformationClass.ToString();
-                            break;
-                        }
-                    case FilterAPI.RegCallbackClass.Reg_Pre_Rename_Key:
-                    case FilterAPI.RegCallbackClass.Reg_Post_Rename_Key:
-                        {
-                            string newName = Encoding.Unicode.GetString(messageSend.DataBuffer);
-                            descrption = "registry key's name is being changed to " + newName;
-                            break;
-                        }
-                    case FilterAPI.RegCallbackClass.Reg_Pre_Enumerate_Key:
-                        {
-                            KEY_INFORMATION_CLASS keyInformationClass = (KEY_INFORMATION_CLASS)messageSend.InfoClass;
-                            descrption = keyInformationClass.ToString();
-
-                            break;
-                        }
-                    case FilterAPI.RegCallbackClass.Reg_Post_Enumerate_Key:
-                        {
-                            KEY_INFORMATION_CLASS keyInformationClass = (KEY_INFORMATION_CLASS)messageSend.InfoClass;
-                            descrption += KeyInformation(keyInformationClass, messageSend.DataBuffer);
-
-                            break;
-                        }
-                    case FilterAPI.RegCallbackClass.Reg_Pre_Enumerate_Value_Key:
-                        {
-                            KEY_VALUE_INFORMATION_CLASS keyValuseInformationClass = (KEY_VALUE_INFORMATION_CLASS)messageSend.InfoClass;
-                            descrption = keyValuseInformationClass.ToString();
-
-                            break;
-                        }
-                    case FilterAPI.RegCallbackClass.Reg_Post_Enumerate_Value_Key:
-                        {
-                            KEY_VALUE_INFORMATION_CLASS keyValuseInformationClass = (KEY_VALUE_INFORMATION_CLASS)messageSend.InfoClass;
-                            descrption += KeyValueInformation(keyValuseInformationClass, messageSend.DataBuffer);
-
-                            break;
-                        }
-                    case FilterAPI.RegCallbackClass.Reg_Pre_Query_Key:
-                        {
-                            KEY_INFORMATION_CLASS keyInformationClass = (KEY_INFORMATION_CLASS)messageSend.InfoClass;
-                            descrption = keyInformationClass.ToString();
-
-                            break;
-                        }
-                    case FilterAPI.RegCallbackClass.Reg_Post_Query_Key:
-                        {
-                            KEY_INFORMATION_CLASS keyInformationClass = (KEY_INFORMATION_CLASS)messageSend.InfoClass;
-                            descrption += KeyInformation(keyInformationClass, messageSend.DataBuffer);
-
-                            break;
-                        }
-                    case FilterAPI.RegCallbackClass.Reg_Pre_Query_Value_Key:
-                        {
-                            KEY_VALUE_INFORMATION_CLASS keyValuseInformationClass = (KEY_VALUE_INFORMATION_CLASS)messageSend.InfoClass;
-                            descrption = keyValuseInformationClass.ToString();
-
-                            break;
-                        }
-                    case FilterAPI.RegCallbackClass.Reg_Post_Query_Value_Key:
-                        {
-                            //for unit test
-                            if (messageSend.FileName.IndexOf("EaseFilter") > 0)
-                            {
-                                //this is our test key.
-                                RegistryUnitTest.postQueryValueKeyPassed = true;
-                            }
-
-                            KEY_VALUE_INFORMATION_CLASS keyValuseInformationClass = (KEY_VALUE_INFORMATION_CLASS)messageSend.InfoClass;
-                            descrption += KeyValueInformation(keyValuseInformationClass, messageSend.DataBuffer);
-
-                            break;
-                        }
-                    case FilterAPI.RegCallbackClass.Reg_Pre_Query_Multiple_Value_Key:
-                        {
-                            break;
-                        }
-                    case FilterAPI.RegCallbackClass.Reg_Post_Query_Multiple_Value_Key:
-                        {
-                            uint entryCount = messageSend.InfoClass;
-
-                            MemoryStream ms = new MemoryStream(messageSend.DataBuffer);
-                            BinaryReader br = new BinaryReader(ms);
-
-                            for (int i = 0; i < entryCount&&ms.Position < ms.Length; i++)
-                            {
-                                long currentOffset = ms.Position;
-                                int nextEntryOffset = br.ReadInt32();
-                                int valueNameLength = br.ReadInt32();
-                                int dataType = br.ReadInt32();
-                                int dataLength = br.ReadInt32();
-                                byte[] valueName = br.ReadBytes(valueNameLength);
-                                byte[] data = br.ReadBytes(dataLength);
-
-                                VALUE_DATA_TYPE type = (VALUE_DATA_TYPE)dataType;
-                                descrption += "Name:" + Encoding.Unicode.GetString(valueName, 0, valueNameLength);
-                                descrption += " Type:" + type.ToString();
-                                descrption += " Data:" + ValueTypeData(type,dataLength, data) + Environment.NewLine;
-
-                                ms.Position = currentOffset + nextEntryOffset;
-
-                            }
-
-                            break;
-                        }
-                    case FilterAPI.RegCallbackClass.Reg_Pre_Create_KeyEx:
-                    case FilterAPI.RegCallbackClass.Reg_Post_Create_KeyEx:
-                    case FilterAPI.RegCallbackClass.Reg_Pre_Open_KeyEx:
-                    case FilterAPI.RegCallbackClass.Reg_Post_Open_KeyEx:
-                        {
-                            descrption += FormatCreateDescription(messageSend);
-                            break;
-                        }
-                    case FilterAPI.RegCallbackClass.Reg_Pre_Load_Key:
-                    case FilterAPI.RegCallbackClass.Reg_Post_Load_Key:
-                        {
-                            descrption += "SourceFile:" + Encoding.Unicode.GetString(messageSend.DataBuffer, 0, (int)messageSend.DataBufferLength);
-                            break;
-                        }
-                    case FilterAPI.RegCallbackClass.Reg_Pre_Replace_Key:
-                    case FilterAPI.RegCallbackClass.Reg_Post_Replace_Key:
-                        {
-                            descrption += "NewFileName:" + Encoding.Unicode.GetString(messageSend.DataBuffer, 0, (int)messageSend.DataBufferLength);
-                            break;
-                        }
-
-                    case FilterAPI.RegCallbackClass.Reg_Pre_Query_KeyName:
-                    case FilterAPI.RegCallbackClass.Reg_Post_Query_KeyName:
-                        {
-                            break;
-                        }
-
-                    default: descrption = "unsupported registry callback class:" + regCallbackClass.ToString(); break;
-                }
-            }
-            catch (Exception ex)
-            {
-                descrption = "Format description failed, return error:" + ex.Message;
             }
 
-            return descrption;
+            autoEvent.Set();
+            messageThread.Abort();
+            disposed = true;
+        }
+
+        ~RegistryHandler()
+        {
+            Dispose(false);
+        }
+
+         public void DisplayEventMessage(RegistryEventArgs registryEventArgs)
+        {
+            if (GlobalConfig.OutputMessageToConsole)
+            {
+                lock (messageQueue)
+                {
+                    if (messageQueue.Count > GlobalConfig.MaximumFilterMessages)
+                    {
+                        messageQueue.Clear();
+                    }
+
+                    messageQueue.Enqueue(registryEventArgs);
+                }
+
+                autoEvent.Set();
+            }
+
+        }
+
+        void ProcessMessage()
+        {
+            int waitTimeout = 2000; //2seconds
+            List<ListViewItem> itemList = new List<ListViewItem>();
+
+            WaitHandle[] waitHandles = new WaitHandle[] { autoEvent, GlobalConfig.stopEvent };
+
+            while (GlobalConfig.isRunning)
+            {
+                if (messageQueue.Count == 0)
+                {
+                    int result = WaitHandle.WaitAny(waitHandles, waitTimeout);
+                    if (!GlobalConfig.isRunning)
+                    {
+                        return;
+                    }
+                }
+
+                System.Diagnostics.Stopwatch stopWatch = new System.Diagnostics.Stopwatch();
+                stopWatch.Start();
+
+                while (messageQueue.Count > 0)
+                {
+                    RegistryEventArgs registryEventMessage;
+
+                    lock (messageQueue)
+                    {
+                        registryEventMessage = (RegistryEventArgs)messageQueue.Dequeue();
+                    }
+
+                    ListViewItem lvItem = FormatRegistryMessage(registryEventMessage);
+                    itemList.Add(lvItem);
+
+                    if (itemList.Count > GlobalConfig.MaximumFilterMessages)
+                    {
+                        AddItemToList(itemList);
+                        itemList.Clear();
+
+                        Thread.Sleep(1000);
+                    }
+                }
+
+                if (itemList.Count > 0)
+                {
+                    AddItemToList(itemList);
+                    itemList.Clear();
+                }
+            }
+
+        }
+
+        void AddItemToList(List<ListViewItem> itemList)
+        {
+            if (itemList.Count < 1)
+            {
+                return;
+            }
+
+            if (listView_Info.InvokeRequired)
+            {
+                listView_Info.Invoke(new MethodInvoker(delegate { AddItemToList(itemList); }));
+            }
+            else
+            {
+
+                while (listView_Info.Items.Count > 0 && listView_Info.Items.Count + itemList.Count > GlobalConfig.MaximumFilterMessages)
+                {
+                    //the message records in the list view reached to the maximum value, remove the first one till the record less than the maximum value.
+                    listView_Info.Items.Clear();
+                }
+
+
+                if (itemList.Count > 0)
+                {
+                    listView_Info.Items.AddRange(itemList.ToArray());
+                    //  listView_Message.EnsureVisible(listView_Message.Items.Count - 1);
+
+                    itemList.Clear();
+
+                }
+            }
         }
 
 
-        public static bool AuthorizeRegistryAccess(FilterAPI.MessageSendData messageSend, ref FilterAPI.MessageReplyData messageReply)
+        public string FormatDateTime(long lDateTime)
         {
-            bool ret = true;
-
             try
             {
-
-                messageReply.MessageId = messageSend.MessageId;
-                messageReply.MessageType = messageSend.MessageType;
-                messageReply.ReturnStatus = (uint)FilterAPI.NTSTATUS.STATUS_SUCCESS;
-
-
-                //
-                //here you can control registry request,block the access or modify the registry data.
-                //
-                //
-
-                //if you don't want to change anything to this registry request, just let it pass through as below setting:
-                //messageReply.FilterStatus = 0;
-                //messageReply.ReturnStatus = (uint)NtStatus.Status.Success;
-
-                //if you want to block the access this registry request, you can return the status as below,
-                //it is only for pre callback requests.
-                //messageReply.FilterStatus = (uint)FilterAPI.FilterStatus.FILTER_COMPLETE_PRE_OPERATION;
-                //messageReply.ReturnStatus = (uint)NtStatus.Status.AccessDenied;
-
-                //if you want to modify the registry data and complete the pre IO with your own data, you can return status as below:
-                // messageReply.FilterStatus = (uint)FilterAPI.FilterStatus.FILTER_COMPLETE_PRE_OPERATION | (uint)FilterAPI.FilterStatus.FILTER_DATA_BUFFER_IS_UPDATED;
-                // messageReply.DataBufferLength = the return data buffer length.
-                // messageReply.DataBuffer = the data you want to return.
-                // messageReply.ReturnStatus = (uint)NtStatus.Status.Success;
-
-                FilterAPI.RegCallbackClass regCallbackClass = (FilterAPI.RegCallbackClass)messageSend.Offset;
-
-                uint dataLength = messageSend.DataBufferLength;
-                byte[] data = messageSend.DataBuffer;
-
-                switch (regCallbackClass)
+                if (0 == lDateTime)
                 {
-
-                    case FilterAPI.RegCallbackClass.Reg_Pre_Query_Value_Key:
-                        {
-                            KEY_VALUE_INFORMATION_CLASS keyValuseInformationClass = (KEY_VALUE_INFORMATION_CLASS)messageSend.InfoClass;
-                            IntPtr keyValueInfoPtr = Marshal.UnsafeAddrOfPinnedArrayElement(data, 0);
-
-                            
-                            if (messageSend.FileName.IndexOf("EaseFilter") <= 0)
-                            {
-                                //this is not our unit test key
-                                break;
-                            }
-
-                            //below code is for unit test to demo how to complete pre-callback registry call with our own data.
-                            EventManager.WriteMessage(400, "AuthorizeRegistryAccess", EventLevel.Error, "Reg_Pre_Query_Value_Key keyValuseInformationClass:" + keyValuseInformationClass.ToString());
-
-                            switch (keyValuseInformationClass)
-                            {
-                                case KEY_VALUE_INFORMATION_CLASS.KeyValueBasicInformation:
-                                    {
-                                       //public struct KEY_VALUE_BASIC_INFORMATION
-                                       // {
-                                       //     public uint TitleIndex;
-                                       //     public uint Type;
-                                       //     public uint NameLength;
-                                       //     public byte[] Name;
-                                       // }
-
-                                        uint titleIndex = 0;
-                                        uint type = (uint)VALUE_DATA_TYPE.REG_DWORD;
-                                        byte[] valueName = Encoding.Unicode.GetBytes("value1");
-                                        uint valueNameLength = (uint)valueName.Length;
-
-                                        MemoryStream ms = new MemoryStream(messageReply.DataBuffer);
-                                        BinaryWriter bw = new BinaryWriter(ms);
-                                        bw.Write(titleIndex);
-                                        bw.Write(type);
-                                        bw.Write(valueNameLength);
-                                        bw.Write(valueName);
-
-                                        messageReply.DataBufferLength = (uint)ms.Position;
-                                        messageReply.FilterStatus = (uint)FilterAPI.FilterStatus.FILTER_COMPLETE_PRE_OPERATION | (uint)FilterAPI.FilterStatus.FILTER_DATA_BUFFER_IS_UPDATED;
-
-                                        
-                                        break;
-                                    }
-                                case KEY_VALUE_INFORMATION_CLASS.KeyValueFullInformation:
-                                    {
-                                        //KeyValueFullInformation class structure
-                                          //public uint TitleIndex;
-                                          //public uint Type;
-                                          //public uint DataOffset;
-                                          //public uint DataLength;
-                                          //public uint NameLength;
-                                          //public byte[] Name;
-
-                                        uint titleIndex = 0;
-                                        uint type =  (uint)VALUE_DATA_TYPE.REG_DWORD;                                        
-                                        uint testData = 12345;
-                                        uint testDataLength = sizeof(uint);
-                                        byte[] valueName = Encoding.Unicode.GetBytes("value1");
-                                        uint valueNameLength =(uint)valueName.Length;
-                                        uint dataOffset = 5 * sizeof(uint) + valueNameLength;
-                                        
-                                        MemoryStream ms = new MemoryStream(messageReply.DataBuffer);
-                                        BinaryWriter bw = new BinaryWriter(ms);
-                                        bw.Write(titleIndex);
-                                        bw.Write(type);
-                                        bw.Write(dataOffset);
-                                        bw.Write(testDataLength);
-                                        bw.Write(valueNameLength);
-                                        bw.Write(valueName);
-                                        bw.Write(testData);
-
-                                        messageReply.DataBufferLength = (uint)ms.Position;
-                                        messageReply.FilterStatus = (uint)FilterAPI.FilterStatus.FILTER_COMPLETE_PRE_OPERATION | (uint)FilterAPI.FilterStatus.FILTER_DATA_BUFFER_IS_UPDATED;
-
-
-                                        break;
-                                    }
-                                case KEY_VALUE_INFORMATION_CLASS.KeyValuePartialInformation:
-                                    {
-                                        // public struct KEY_VALUE_PARTIAL_INFORMATION
-                                        //{
-                                        //    public uint TitleIndex;
-                                        //    public uint Type;
-                                        //    public uint DataLength;
-                                        //    public byte[] Data;
-                                        //}
-
-                                        uint titleIndex = 0;
-                                        uint type = (uint)VALUE_DATA_TYPE.REG_DWORD;
-                                        uint testData = 12345;
-                                        uint testDataLength = sizeof(uint);
-
-                                        MemoryStream ms = new MemoryStream(messageReply.DataBuffer);
-                                        BinaryWriter bw = new BinaryWriter(ms);
-
-                                        bw.Write(titleIndex);
-                                        bw.Write(type);
-                                        bw.Write(testDataLength);
-                                        bw.Write(testData);
-
-                                        messageReply.DataBufferLength = (uint)ms.Position;
-
-                                        messageReply.FilterStatus = (uint)FilterAPI.FilterStatus.FILTER_COMPLETE_PRE_OPERATION | (uint)FilterAPI.FilterStatus.FILTER_DATA_BUFFER_IS_UPDATED;
-                                        messageReply.ReturnStatus = (uint)FilterAPI.NTSTATUS.STATUS_SUCCESS;
-
-                                        break;
-                                    }
-
-
-                                default: break;
-                            }
-                            break;
-                        }
-
-                    case FilterAPI.RegCallbackClass.Reg_Pre_Create_KeyEx:
-                    case FilterAPI.RegCallbackClass.Reg_Pre_Open_KeyEx:
-                        {
-                            //this is our unit test key
-                            if (messageSend.FileName.IndexOf("EaseFilter") > 0 )
-                            {
-                                //NOT allow to create new registry key.
-
-                                messageReply.FilterStatus = (uint)FilterAPI.FilterStatus.FILTER_COMPLETE_PRE_OPERATION;
-                                messageReply.ReturnStatus = (uint)NtStatus.Status.AccessDenied;
-                            }
-
-                            break;
-                        }
-
-                    default: break;
+                    return "0";
                 }
+
+                DateTime dateTime = DateTime.FromFileTime(lDateTime);
+                string ret = dateTime.ToString("yyyy-MM-ddTHH:mm");
+                return ret;
             }
             catch (Exception ex)
             {
-                EventManager.WriteMessage(400, "AuthorizeRegistryAccess", EventLevel.Error, "AuthorizeRegistryAccess exception:" + ex.Message);
+                EventManager.WriteMessage(502, "FormatDateTime", EventLevel.Error, "FormatDateTime :" + lDateTime.ToString() + " failed." + ex.Message);
+                return ex.Message;
             }
-
-            return ret;
         }
 
-        private static string ValueTypeData(VALUE_DATA_TYPE type, int dataSize, byte[] data)
+    
+        private void AddItemToList(ListViewItem lvItem)
         {
-            string dataStr = string.Empty;
+            if (listView_Info.InvokeRequired)
+            {
+                listView_Info.Invoke(new MethodInvoker(delegate { AddItemToList(lvItem); }));
+            }
+            else
+            {
+
+                while (listView_Info.Items.Count > GlobalConfig.MaximumFilterMessages)
+                {
+                    listView_Info.Items.RemoveAt(0);
+                }
+
+                listView_Info.Items.Add(lvItem);
+
+            }
+        }
+
+        string GetRegCallbackClassName(FilterAPI.MessageSendData messageSend)
+        {
+            if (messageSend.MessageType == (uint)FilterAPI.FilterCommand.FILTER_SEND_REG_CALLBACK_INFO)
+            {
+                return ((FilterAPI.RegCallbackClass)messageSend.Offset).ToString();
+            }
+            else
+            {
+                return "";
+            }
+        }
+
+        public ListViewItem FormatRegistryMessage(RegistryEventArgs registryEventArgs)
+        {
+            ListViewItem lvItem = new ListViewItem();
 
             try
             {
-                switch (type)
+
+                string[] listData = new string[listView_Info.Columns.Count];
+                int col = 0;
+                listData[col++] = registryEventArgs.MessageId.ToString();
+                listData[col++] = FormatDateTime(registryEventArgs.TransactionTime);
+                listData[col++] = registryEventArgs.UserName;
+                listData[col++] = registryEventArgs.ProcessName + "  (" + registryEventArgs.ProcessId + ")";
+                listData[col++] = registryEventArgs.ThreadId.ToString();
+                listData[col++] = registryEventArgs.EventName;
+                listData[col++] = registryEventArgs.FileName;
+                listData[col++] = registryEventArgs.IOStatusToString();
+                listData[col++] = registryEventArgs.Description;
+
+                lvItem = new ListViewItem(listData, 0);
+
+                if (registryEventArgs.IoStatus >= NtStatus.Status.Error)
                 {
-                    case VALUE_DATA_TYPE.REG_BINARY:
-                        {
-                            //maximum data size to 256;
-                            for (int i = 0; i < 256; i++)
-                            {
-                                if (i >= dataSize)
-                                {
-                                    break;
-                                }
-
-                                dataStr += string.Format("0x{0:x2}", data[i]);
-
-                            }
-
-                            break;
-                        }
-                    case VALUE_DATA_TYPE.REG_DWORD:
-                        {
-                            uint value = BitConverter.ToUInt32(data, 0);
-                            dataStr = string.Format("0x{0:x8}({1})", value, value);
-                            break;
-                        }
-                    case VALUE_DATA_TYPE.REG_DWORD_BIG_ENDIAN:
-                        {
-                            //A 4-byte numerical value whose least significant byte is at the highest address
-                            byte leastByte = data[3];
-                            byte secondByte = data[2];
-                            data[3] = data[0];
-                            data[2] = data[1];
-                            data[1] = secondByte;
-                            data[0] = leastByte;
-
-                            uint value = BitConverter.ToUInt32(data, 0);
-                            dataStr = string.Format("0x{0:x8}({1})", value, value);
-
-                            break;
-                        }
-                    case VALUE_DATA_TYPE.REG_EXPAND_SZ:
-                        {
-                            //A null-terminated Unicode string, containing unexpanded references to environment variables, such as "%PATH%"
-                            dataStr = Encoding.Unicode.GetString(data, 0, dataSize).Replace("\0", "");
-                            break;
-                        }
-                    case VALUE_DATA_TYPE.REG_MULTI_SZ:
-                        {
-                            //An array of null-terminated strings, terminated by another zero
-                            dataStr = Encoding.Unicode.GetString(data, 0, dataSize).Replace("\0", "");
-                            break;
-                        }
-                    case VALUE_DATA_TYPE.REG_SZ:
-                        {
-                            //A null-terminated Unicode string
-                            dataStr = Encoding.Unicode.GetString(data, 0, dataSize).Replace("\0", "");
-                            break;
-                        }
-                    case VALUE_DATA_TYPE.REG_QWORD:
-                        {
-                            UInt64 value = BitConverter.ToUInt64(data, 0);
-                            dataStr = string.Format("0x{0:x16}({1})", value, value);
-                            break;
-                        }
-
-                    default: break;
+                    lvItem.BackColor = Color.LightGray;
+                    lvItem.ForeColor = Color.Red;
                 }
+                else if (registryEventArgs.IoStatus > NtStatus.Status.Warning)
+                {
+                    lvItem.BackColor = Color.LightGray;
+                    lvItem.ForeColor = Color.Yellow;
+                }
+
+               
+
             }
             catch (Exception ex)
             {
-                dataStr = "get data failed:" + ex.Message;
+                EventManager.WriteMessage(445, "GetFilterMessage", EventLevel.Error, "Add callback message failed." + ex.Message);
+                lvItem = null;
             }
 
+            return lvItem;
 
-            return dataStr;
         }
 
-        private static string KeyInformation(KEY_INFORMATION_CLASS keyInfoClass, byte[] keyInformation)
+        /// <summary>
+        /// Fires this event when the registry access was blocked by the setting,
+        /// if the control flag "ENABLE_FILTER_SEND_DENIED_REG_EVENT" was enabled.
+        /// </summary>
+        public void NotifyRegWasBlocked(object sender, RegistryEventArgs e)
         {
-            string keyInfoStr = "(" + keyInfoClass.ToString() + ") ";
-
-            try
-            {
-                MemoryStream ms = new MemoryStream(keyInformation);
-                BinaryReader br = new BinaryReader(ms);
-
-                switch (keyInfoClass)
-                {
-                    case KEY_INFORMATION_CLASS.KeyBasicInformation:
-                        {
-                            long lastWriteTime = br.ReadInt64();
-                            uint titleIndex = br.ReadUInt32();
-                            uint nameLength = br.ReadUInt32();
-                            string name = Encoding.Unicode.GetString(keyInformation, (int)ms.Position, (int)nameLength);
-
-                            keyInfoStr += "LastWriteTime:" + DateTime.FromFileTime(lastWriteTime).ToShortDateString();
-                            keyInfoStr += " Name:" + name;
-
-                            break;
-                        }
-                    case KEY_INFORMATION_CLASS.KeyNodeInformation:
-                        {
-                            long lastWriteTime = br.ReadInt64();
-                            uint titleIndex = br.ReadUInt32();
-                            uint classOffset = br.ReadUInt32();
-                            uint classLength = br.ReadUInt32();
-                            uint nameLength = br.ReadUInt32();
-                            string name = Encoding.Unicode.GetString(keyInformation, (int)ms.Position, (int)nameLength);
-                            string className = Encoding.Unicode.GetString(keyInformation, (int)classOffset, (int)classLength);
-
-                            keyInfoStr += "LastWriteTime:" + DateTime.FromFileTime(lastWriteTime).ToShortDateString();
-                            keyInfoStr += " Name:" + name + " ClassName:" + className;
-
-                            break;
-                        }
-                    case KEY_INFORMATION_CLASS.KeyFullInformation:
-                        {
-                            long lastWriteTime = br.ReadInt64();
-                            uint titleIndex = br.ReadUInt32();
-                            uint classOffset = br.ReadUInt32();
-                            uint classLength = br.ReadUInt32();
-                            uint subKeys = br.ReadUInt32();
-                            uint maxNameLen = br.ReadUInt32();
-                            uint maxClassLen = br.ReadUInt32();
-                            uint values = br.ReadUInt32();
-                            uint maxValueNameLen = br.ReadUInt32();
-                            uint maxValueDataLen = br.ReadUInt32();
-                            uint nameLength = br.ReadUInt32();
-                            string className = Encoding.Unicode.GetString(keyInformation, (int)classOffset, (int)classLength);
-
-                            keyInfoStr += "LastWriteTime:" + DateTime.FromFileTime(lastWriteTime).ToShortDateString();
-                            keyInfoStr += " subKeys:" + subKeys + " valueEntries:" + values + " ClassName:" + className;
-
-                            break;
-                        }
-                    case KEY_INFORMATION_CLASS.KeyNameInformation:
-                        {
-                            uint nameLength = br.ReadUInt32();
-                            string name = Encoding.Unicode.GetString(keyInformation, (int)ms.Position, (int)nameLength);
-                            keyInfoStr += " Name:" + name;
-
-                            break;
-                        }
-
-
-                    default: break;
-                }
-            }
-            catch (Exception ex)
-            {
-                keyInfoStr = "get data failed:" + ex.Message;
-            }
-
-
-            return keyInfoStr;
+            DisplayEventMessage(e);
+            //do your job here.
         }
 
-        private static string KeyValueInformation(KEY_VALUE_INFORMATION_CLASS keyValueInfoClass, byte[] keyValueInformation)
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void OnPreQueryValueKey(object sender, RegistryEventArgs e)
         {
-            string keyValueInfoStr = string.Empty;
+            DisplayEventMessage(e);
+            //do your job here.
 
-            try
+            //   //test block the registry event.
+            //    e.ReturnStatus = NtStatus.Status.AccessDenied;
+
+            KEY_VALUE_INFORMATION_CLASS keyValuseInformationClass = (KEY_VALUE_INFORMATION_CLASS)e.InfoClass;
+
+            //test to replace the query value with your own data.
+            if (e.FileName.IndexOf("EaseFilter") > 0)
             {
-                MemoryStream ms = new MemoryStream(keyValueInformation);
-                BinaryReader br = new BinaryReader(ms);
 
-                switch (keyValueInfoClass)
+                //below code is to demo how to complete pre-callback registry call with our own data.
+                switch (keyValuseInformationClass)
                 {
                     case KEY_VALUE_INFORMATION_CLASS.KeyValueBasicInformation:
                         {
-                            int titleIndex = br.ReadInt32();
-                            int type = br.ReadInt32();
-                            int nameLength = br.ReadInt32();
-                            keyValueInfoStr = "(" + keyValueInfoClass.ToString() + ") Name:" + Encoding.Unicode.GetString(keyValueInformation, (int)ms.Position, nameLength);
+                            //public struct KEY_VALUE_BASIC_INFORMATION
+                            // {
+                            //     public uint TitleIndex;
+                            //     public uint Type;
+                            //     public uint NameLength;
+                            //     public byte[] Name;
+                            // }
+
+                            uint titleIndex = 0;
+                            uint type = (uint)VALUE_DATA_TYPE.REG_DWORD;
+                            byte[] valueName = Encoding.Unicode.GetBytes("value1");
+                            uint valueNameLength = (uint)valueName.Length;
+
+                            MemoryStream ms = new MemoryStream();
+                            BinaryWriter bw = new BinaryWriter(ms);
+                            bw.Write(titleIndex);
+                            bw.Write(type);
+                            bw.Write(valueNameLength);
+                            bw.Write(valueName);
+
+                            e.ReturnDataBuffer = ms.ToArray();
+                            e.IsDataModified = true;
 
                             break;
                         }
                     case KEY_VALUE_INFORMATION_CLASS.KeyValueFullInformation:
                         {
-                            int titleIndex = br.ReadInt32();
-                            int type = br.ReadInt32();
-                            int dataOffset = br.ReadInt32();
-                            int dataLength = br.ReadInt32();
-                            int nameLength = br.ReadInt32();
-                            keyValueInfoStr = "(" + keyValueInfoClass.ToString() + ") Name:" + Encoding.Unicode.GetString(keyValueInformation, (int)ms.Position, nameLength);
-                            keyValueInfoStr += " Type:" + ((VALUE_DATA_TYPE)type).ToString();
+                            //KeyValueFullInformation class structure
+                            //public uint TitleIndex;
+                            //public uint Type;
+                            //public uint DataOffset;
+                            //public uint DataLength;
+                            //public uint NameLength;
+                            //public byte[] Name;
 
-                            byte[] dataBuffer = new byte[dataLength];
-                            Array.Copy(keyValueInformation, dataOffset, dataBuffer, 0, dataBuffer.Length);
+                            uint titleIndex = 0;
+                            uint type = (uint)VALUE_DATA_TYPE.REG_DWORD;
+                            uint testData = 12345;
+                            uint testDataLength = sizeof(uint);
+                            byte[] valueName = Encoding.Unicode.GetBytes("value1");
+                            uint valueNameLength = (uint)valueName.Length;
+                            uint dataOffset = 5 * sizeof(uint) + valueNameLength;
 
-                            keyValueInfoStr += " Data:" + ValueTypeData((VALUE_DATA_TYPE)type, dataBuffer.Length, dataBuffer);
+                            MemoryStream ms = new MemoryStream();
+                            BinaryWriter bw = new BinaryWriter(ms);
+                            bw.Write(titleIndex);
+                            bw.Write(type);
+                            bw.Write(dataOffset);
+                            bw.Write(testDataLength);
+                            bw.Write(valueNameLength);
+                            bw.Write(valueName);
+                            bw.Write(testData);
+
+                            e.ReturnDataBuffer = ms.ToArray();
+                            e.IsDataModified = true;
 
                             break;
                         }
                     case KEY_VALUE_INFORMATION_CLASS.KeyValuePartialInformation:
                         {
-                            int titleIndex = br.ReadInt32();
-                            int type = br.ReadInt32();
-                            int dataLength = br.ReadInt32();
-                            keyValueInfoStr += "(" + keyValueInfoClass.ToString() + ") Type:" + ((VALUE_DATA_TYPE)type).ToString();
+                            // public struct KEY_VALUE_PARTIAL_INFORMATION
+                            //{
+                            //    public uint TitleIndex;
+                            //    public uint Type;
+                            //    public uint DataLength;
+                            //    public byte[] Data;
+                            //}
 
-                            byte[] dataBuffer = new byte[dataLength];
-                            Array.Copy(keyValueInformation, ms.Position, dataBuffer, 0, dataBuffer.Length);
-                            keyValueInfoStr += " Data:" + ValueTypeData((VALUE_DATA_TYPE)type, dataBuffer.Length, dataBuffer);
+                            uint titleIndex = 0;
+                            uint type = (uint)VALUE_DATA_TYPE.REG_DWORD;
+                            uint testData = 12345;
+                            uint testDataLength = sizeof(uint);
+
+                            MemoryStream ms = new MemoryStream();
+                            BinaryWriter bw = new BinaryWriter(ms);
+
+                            bw.Write(titleIndex);
+                            bw.Write(type);
+                            bw.Write(testDataLength);
+                            bw.Write(testData);
+
+                            e.ReturnDataBuffer = ms.ToArray();
+                            e.IsDataModified = true;
 
                             break;
                         }
@@ -792,61 +590,473 @@ namespace RegMon
                     default: break;
                 }
             }
-            catch (Exception ex)
-            {
-                keyValueInfoStr = "get data failed:" + ex.Message;
-            }
 
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  OnPreDeleteKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
 
-            return keyValueInfoStr;
+            //   //test block the registry event.
+            //    e.ReturnStatus = NtStatus.Status.AccessDenied;
         }
 
-        private static string FormatCreateDescription(FilterAPI.MessageSendData messageSend)
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  OnPreSetValueKey(object sender, RegistryEventArgs e)
         {
+            DisplayEventMessage(e);
+            //do your job here.
 
-            uint createOptions = messageSend.CreateOptions;
-            uint desiredAccess = messageSend.DesiredAccess;
-            uint dispositions = messageSend.Disposition;
+            //   //test block the registry event.
+            //    e.ReturnStatus = NtStatus.Status.AccessDenied;
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  OnPreDeleteValueKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
 
-            string message = string.Empty;
+            //   //test block the registry event.
+            //    e.ReturnStatus = NtStatus.Status.AccessDenied;
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  OnPreSetInformationKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
 
-            message += "createOptions:";
-            foreach (REG_CREATE_OPTIONS createOption in Enum.GetValues(typeof(REG_CREATE_OPTIONS)))
-            {
-                if (createOption == (REG_CREATE_OPTIONS)((uint)createOption & createOptions))
-                {
-                    message += createOption.ToString() + "; ";
-                }
-            }
+            //   //test block the registry event.
+            //    e.ReturnStatus = NtStatus.Status.AccessDenied;
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  OnPreRenameKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
 
-            message += "(0x" + createOptions.ToString("X") + ");\r\n";
+            //   //test block the registry event.
+            //    e.ReturnStatus = NtStatus.Status.AccessDenied;
+        }        
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  OnPreEnumerateKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
 
-            message += "desiredAccess:";
-            foreach (REG_ACCESS_MASK accessMask in Enum.GetValues(typeof(REG_ACCESS_MASK)))
-            {
-                if (accessMask == (REG_ACCESS_MASK)((uint)accessMask & desiredAccess))
-                {
-                    message += accessMask.ToString() + "; ";
-                }
-            }
+            //   //test block the registry event.
+            //    e.ReturnStatus = NtStatus.Status.AccessDenied;
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  OnPreEnumerateValueKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
 
-            message += "(0x" + desiredAccess.ToString("X") + ");\r\n";
+            //   //test block the registry event.
+            //    e.ReturnStatus = NtStatus.Status.AccessDenied;
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  OnPreQueryKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
 
-            if (dispositions > 0)
-            {
-                message += "dispositions:";
-                foreach (REG_DISPOSITION disposition in Enum.GetValues(typeof(REG_DISPOSITION)))
-                {
-                    if (disposition == (REG_DISPOSITION)((uint)disposition & dispositions))
-                    {
-                        message += disposition.ToString() + "; ";
-                    }
-                }
+            //   //test block the registry event.
+            //    e.ReturnStatus = NtStatus.Status.AccessDenied;
+        }       
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  OnPreQueryMultipleValueKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
 
-                message += "(0x" + desiredAccess.ToString("X") + ");";
-            }
+            //   //test block the registry event.
+            //    e.ReturnStatus = NtStatus.Status.AccessDenied;
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  OnPreCreateKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
 
-            return message;
+            //   //test block the registry event.
+            //    e.ReturnStatus = NtStatus.Status.AccessDenied;
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  OnPreOpenKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+            //   //test block the registry event.
+            //    e.ReturnStatus = NtStatus.Status.AccessDenied;
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  OnPreKeyHandleClose(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+            //   //test block the registry event.
+            //    e.ReturnStatus = NtStatus.Status.AccessDenied;
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  OnPreCreateKeyEx(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+            //   //test block the registry event.
+            //    e.ReturnStatus = NtStatus.Status.AccessDenied;
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  OnPreOpenKeyEx(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+            //   //test block the registry event.
+            //    e.ReturnStatus = NtStatus.Status.AccessDenied;
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  OnPreFlushKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+            //   //test block the registry event.
+            //    e.ReturnStatus = NtStatus.Status.AccessDenied;
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  OnPreLoadKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+            //   //test block the registry event.
+            //    e.ReturnStatus = NtStatus.Status.AccessDenied;
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  OnPreUnLoadKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+            //   //test block the registry event.
+            //    e.ReturnStatus = NtStatus.Status.AccessDenied;
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  OnPreQueryKeySecurity(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+            //   //test block the registry event.
+            //    e.ReturnStatus = NtStatus.Status.AccessDenied;
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  OnPreSetKeySecurity(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+            //   //test block the registry event.
+            //    e.ReturnStatus = NtStatus.Status.AccessDenied;
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  OnPreRestoreKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+            //   //test block the registry event.
+            //    e.ReturnStatus = NtStatus.Status.AccessDenied;
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  OnPreSaveKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+            //   //test block the registry event.
+            //    e.ReturnStatus = NtStatus.Status.AccessDenied;
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  OnPreReplaceKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+            //   //test block the registry event.
+            //    e.ReturnStatus = NtStatus.Status.AccessDenied;
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  OnPreQueryKeyName(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+            //   //test block the registry event.
+            //    e.ReturnStatus = NtStatus.Status.AccessDenied;
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  NotifyDeleteKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  NotifySetValueKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  NotifyDeleteValueKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  NotifySetInformationKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  NotifyRenameKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  NotifyEnumerateKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  NotifyEnumerateValueKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  NotifyQueryKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  NotifyQueryValueKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  NotifyQueryMultipleValueKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  NotifyCreateKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  NotifyOpenKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  NotifyKeyHandleClose(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  NotifyCreateKeyEx(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  NotifyOpenKeyEx(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  NotifyFlushKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  NotifyLoadKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  NotifyUnLoadKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  NotifyQueryKeySecurity(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  NotifySetKeySecurity(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  NotifyRestoreKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  NotifySaveKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  NotifyReplaceKey(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
+        }
+        /// <summary>
+        /// Fires this event when the register registry event was triggered.
+        /// </summary>
+        public void  NotifyQueryKeyName(object sender, RegistryEventArgs e)
+        {
+            DisplayEventMessage(e);
+            //do your job here.
+
         }
 
     }

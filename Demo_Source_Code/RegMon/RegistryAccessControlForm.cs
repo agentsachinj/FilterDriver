@@ -25,6 +25,8 @@ using System.Text;
 using System.IO;
 using System.Windows.Forms;
 
+using EaseFilter.FilterControl;
+
 namespace EaseFilter.CommonObjects
 {
     public partial class RegistryAccessControlForm : Form

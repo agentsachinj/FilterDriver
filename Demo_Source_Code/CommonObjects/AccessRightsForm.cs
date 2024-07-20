@@ -24,6 +24,8 @@ using System.Linq;
 using System.Text;
 using System.Windows.Forms;
 
+using EaseFilter.FilterControl;
+
 namespace EaseFilter.CommonObjects
 {
 
@@ -32,6 +34,8 @@ namespace EaseFilter.CommonObjects
         public enum AccessRightType
         {
             ProcessNameRight = 0,
+            Sha256Process,
+            SignedProcess,
             ProccessIdRight,
             UserNameRight,
         }
@@ -45,13 +49,20 @@ namespace EaseFilter.CommonObjects
             InitializeComponent();
 
             type = _type;
+            groupBox_AccessRights.Location = groupBox_ProcessSha256.Location;
+            groupBox_ProcessId.Location = groupBox_ProcessName.Location;
+            groupBox_ProcessSha256.Location = groupBox_ProcessName.Location;
+            groupBox_SignedProcess.Location = groupBox_ProcessName.Location;
             groupBox_UserName.Location = groupBox_ProcessName.Location;
 
             textBox_FileAccessFlags.Text = FilterAPI.ALLOW_MAX_RIGHT_ACCESS.ToString();
+            SetCheckBoxValue();
 
             switch (type)
             {
                 case AccessRightType.ProcessNameRight: groupBox_ProcessName.Visible = true; break;
+                case AccessRightType.Sha256Process: groupBox_ProcessSha256.Visible = true; break;
+                case AccessRightType.SignedProcess: groupBox_SignedProcess.Visible = true; break;
                 case AccessRightType.ProccessIdRight: groupBox_ProcessId.Visible = true; break;
                 case AccessRightType.UserNameRight: groupBox_UserName.Visible = true; break;
             }
@@ -80,6 +91,54 @@ namespace EaseFilter.CommonObjects
                                         }
 
                                         accessRightText += processName.Trim() + "!" + textBox_FileAccessFlags.Text;
+                                    }
+                                }
+                            }
+                        }
+                        break;
+                    }
+
+                case AccessRightType.Sha256Process:
+                    {
+                        if (textBox_ProcessSha256Hash.Text.Trim().Length > 0)
+                        {
+                            string[] processShaList = textBox_ProcessSha256Hash.Text.Trim().Split(new char[] { ';' });
+                            if (processShaList.Length > 0)
+                            {
+                                foreach (string processSha in processShaList)
+                                {
+                                    if (processSha.Trim().Length > 0)
+                                    {
+                                        if (accessRightText.Length > 0)
+                                        {
+                                            accessRightText += ";";
+                                        }
+
+                                        accessRightText += processSha.Trim() + "!" + textBox_FileAccessFlags.Text;
+                                    }
+                                }
+                            }
+                        }
+                        break;
+                    }
+
+                case AccessRightType.SignedProcess:
+                    {
+                        if (textBox_ProcessCertificateName.Text.Trim().Length > 0)
+                        {
+                            string[] certificateNameList = textBox_ProcessCertificateName.Text.Trim().Split(new char[] { ';' });
+                            if (certificateNameList.Length > 0)
+                            {
+                                foreach (string certificateName in certificateNameList)
+                                {
+                                    if (certificateName.Trim().Length > 0)
+                                    {
+                                        if (accessRightText.Length > 0)
+                                        {
+                                            accessRightText += ";";
+                                        }
+
+                                        accessRightText += certificateName.Trim() + "!" + textBox_FileAccessFlags.Text;
                                     }
                                 }
                             }
@@ -211,11 +270,11 @@ namespace EaseFilter.CommonObjects
 
             if ((accessFlags & (uint)FilterAPI.AccessFlag.ALLOW_QUERY_SECURITY_ACCESS) > 0)
             {
-                checkBox_QuerySecurity.Checked = true;
+                checkBox_EnableEncryptionOnRead.Checked = true;
             }
             else
             {
-                checkBox_QuerySecurity.Checked = false;
+                checkBox_EnableEncryptionOnRead.Checked = false;
             }
 
             if ((accessFlags & (uint)FilterAPI.AccessFlag.ALLOW_SET_SECURITY_ACCESS) > 0)
@@ -229,11 +288,11 @@ namespace EaseFilter.CommonObjects
 
             if ((accessFlags & (uint)FilterAPI.AccessFlag.ALLOW_ALL_SAVE_AS) > 0)
             {
-                checkBox_AllowSaveAs.Checked = true;
+                checkBox_AllowEncryptNewFile.Checked = true;
             }
             else
             {
-                checkBox_AllowSaveAs.Checked = false;
+                checkBox_AllowEncryptNewFile.Checked = false;
             }
 
             if ((accessFlags & (uint)FilterAPI.AccessFlag.ALLOW_COPY_PROTECTED_FILES_OUT) > 0)
@@ -252,6 +311,16 @@ namespace EaseFilter.CommonObjects
             else
             {
                 checkBox_AllowReadEncryptedFiles.Checked = false;
+            }
+
+
+            if ((accessFlags & (uint)FilterAPI.AccessFlag.DISABLE_ENCRYPT_DATA_ON_READ) > 0)
+            {
+                checkBox_EnableEncryptionOnRead.Checked = false;
+            }
+            else
+            {
+                checkBox_EnableEncryptionOnRead.Checked = true;
             }
         }
 
@@ -382,16 +451,16 @@ namespace EaseFilter.CommonObjects
             textBox_FileAccessFlags.Text = accessFlags.ToString();
         }
 
-        private void checkBox_QuerySecurity_CheckedChanged(object sender, EventArgs e)
+        private void checkBox_EncryptionOnRead_CheckedChanged(object sender, EventArgs e)
         {
             uint accessFlags = uint.Parse(textBox_FileAccessFlags.Text.Trim());
-            if (checkBox_QuerySecurity.Checked)
+            if (checkBox_EnableEncryptionOnRead.Checked)
             {
-                accessFlags |= (uint)FilterAPI.AccessFlag.ALLOW_QUERY_SECURITY_ACCESS;
+                accessFlags &= ~(uint)FilterAPI.AccessFlag.DISABLE_ENCRYPT_DATA_ON_READ;
             }
             else
             {
-                accessFlags &= ~(uint)FilterAPI.AccessFlag.ALLOW_QUERY_SECURITY_ACCESS;
+                accessFlags |= (uint)FilterAPI.AccessFlag.DISABLE_ENCRYPT_DATA_ON_READ;
             }
 
             textBox_FileAccessFlags.Text = accessFlags.ToString();
@@ -412,16 +481,16 @@ namespace EaseFilter.CommonObjects
             textBox_FileAccessFlags.Text = accessFlags.ToString();
         }
 
-        private void checkBox_AllowSaveAs_CheckedChanged(object sender, EventArgs e)
+        private void checkBox_AllowEncryptNewFile_CheckedChanged(object sender, EventArgs e)
         {
             uint accessFlags = uint.Parse(textBox_FileAccessFlags.Text.Trim());
-            if (checkBox_AllowSaveAs.Checked)
+            if (checkBox_AllowEncryptNewFile.Checked)
             {
-                accessFlags |= (uint)FilterAPI.AccessFlag.ALLOW_ALL_SAVE_AS;
+                accessFlags |= (uint)FilterAPI.AccessFlag.ALLOW_ENCRYPT_NEW_FILE;
             }
             else
             {
-                accessFlags &= ~(uint)FilterAPI.AccessFlag.ALLOW_ALL_SAVE_AS;
+                accessFlags &= ~(uint)FilterAPI.AccessFlag.ALLOW_ENCRYPT_NEW_FILE;
             }
 
             textBox_FileAccessFlags.Text = accessFlags.ToString();
@@ -470,6 +539,81 @@ namespace EaseFilter.CommonObjects
             }
         }
 
+        private void button_GetProcessSha256_Click(object sender, EventArgs e)
+        {
+            OpenFileDialog fileDialog = new OpenFileDialog();
+            if (fileDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            {
+                string fileName = fileDialog.FileName;
+                byte[] hashBytes = new byte[32];
+                uint hashBytesLength = 32;
+
+                if (FilterAPI.Sha256HashFile(fileName, hashBytes, ref hashBytesLength))
+                {
+                    textBox_ProcessSha256Hash.Text += Utils.ByteArrayToHex(hashBytes);
+                }
+                else
+                {
+                    string lastError = "Get file sha256 hash failed with error:" + FilterAPI.GetLastErrorMessage();
+                    MessageBox.Show(lastError, "Get sha256 hash", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+
+        }
+
+        private void button_GetCertificateName_Click(object sender, EventArgs e)
+        {
+            OpenFileDialog fileDialog = new OpenFileDialog();
+            if (fileDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            {
+                string fileName = fileDialog.FileName;
+                uint len = 1024;
+                long signedTime = 0;
+                string subjectName = new string((char)0, (int)len);
+
+                if (FilterAPI.GetSignerInfo(fileName, subjectName, ref len, ref signedTime))
+                {
+                    subjectName = subjectName.Substring(0, (int)len / 2);
+                    textBox_ProcessCertificateName.Text = subjectName;
+                }
+                else
+                {
+                    string lastError = "Get process's certificate name failed with error:" + FilterAPI.GetLastErrorMessage();
+                    MessageBox.Show(lastError, "Get process's certificate name", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }       
+
+
+        private void button_InfoProcessName_Click(object sender, EventArgs e)
+        {
+            MessageBox.Show("Set the specific access rights to the process name list, seperate the process name with ';'.");
+        }
+
+        private void button_InfoUserName_Click(object sender, EventArgs e)
+        {
+            MessageBox.Show("Set the specific access rights to the user name list, seperate the user name with ';'.");
+        }
+
+        private void button_InfoCopyout_Click(object sender, EventArgs e)
+        {
+            MessageBox.Show("Prevent the files from being copied out of the folder when it was disabled.");
+        }
+
+        private void button_InfoEncryptNewFile_Click(object sender, EventArgs e)
+        {
+            MessageBox.Show("Automatically encrypt the new created file when it was enabled, or it won't encrypt the new created file, a use case: copy the encrypted file to the folder, it won't encrypt the file again. To enable this feature it requires the encryption was enabled in the filter rule.");  
+        }
+
+        private void button_InfoDecryptFile_Click(object sender, EventArgs e)
+        {
+            MessageBox.Show("Automatically decrypt the created file when it was enabled, or the process will read the raw data of the encrypted file, a use case: the backup software. To enable this feature it requires the encryption was enabled in the filter rule.");
+        }
+
+        private void button_InfoEncryptOnRead_Click(object sender, EventArgs e)
+        {
+            MessageBox.Show("If you want to encrypt the file only when it was read by the process, you can enable the encryption feature, disable the new file encryption, enable the encryption on the go. To enable this feature it requires the encryption was enabled in the filter rule.");
+        }      
  
     }
 }

@@ -37,7 +37,6 @@ namespace SecureSandbox
         {
               
             InitializeComponent();
-            Utils.CopyOSPlatformDependentFiles();
 
             this.Hide();
 

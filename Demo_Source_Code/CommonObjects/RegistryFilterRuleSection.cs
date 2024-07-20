@@ -21,6 +21,8 @@ using System.Linq;
 using System.Text;
 using System.Configuration;
 
+using EaseFilter.FilterControl;
+
 namespace EaseFilter.CommonObjects
 {
     public class RegistryFilterRuleSection : ConfigurationSection
@@ -163,12 +165,36 @@ namespace EaseFilter.CommonObjects
             RegistryFilterRule dest = new RegistryFilterRule();
             dest.ProcessId = ProcessId;
             dest.ProcessNameFilterMask = ProcessNameFilterMask;
+            dest.RegistryKeyNameFilterMask = RegistryKeyNameFilterMask;
             dest.UserName = UserName;
             dest.AccessFlag = AccessFlag;
             dest.RegCallbackClass = RegCallbackClass;
             dest.IsExcludeFilter = IsExcludeFilter;
 
             return dest;
+        }
+
+        public RegistryFilter ToRegistryFilter()
+        {
+            RegistryFilter registryFilter = new RegistryFilter();
+
+            if (ProcessId.Trim().Length > 0)
+            {
+                registryFilter.ProcessId = uint.Parse(ProcessId);
+            }
+            else
+            {
+                registryFilter.ProcessId = 0;
+            }
+
+            registryFilter.ProcessNameFilterMask = ProcessNameFilterMask;
+            registryFilter.RegistryKeyNameFilterMask = RegistryKeyNameFilterMask;
+            registryFilter.UserName = UserName;
+            registryFilter.ControlFlag = AccessFlag;
+            registryFilter.RegCallbackClass = RegCallbackClass;
+            registryFilter.IsExcludeFilter = IsExcludeFilter;
+
+            return registryFilter;
         }
 
     }

@@ -24,36 +24,64 @@ using System.Linq;
 using System.Text;
 using System.Windows.Forms;
 
+using EaseFilter.FilterControl;
+
 namespace EaseFilter.CommonObjects
 {
     public partial class FilterRuleForm : Form
     {
-        FilterRule filterRule = new FilterRule();
+        FileFilterRule filterRule = new FileFilterRule();
+        FileFilterRule passInFilterRule = null;
 
-        public FilterRuleForm(FilterRule _filterRule)
+        public FilterRuleForm()
+        {
+            //set the default value for the new filter rule.
+            filterRule.IncludeFileFilterMask = "c:\\test\\*";
+            filterRule.EncryptMethod = (int)FilterAPI.EncryptionMethod.ENCRYPT_FILE_WITH_SAME_KEY_AND_UNIQUE_IV;
+            filterRule.EncryptWriteBufferSize = 1048576;
+            filterRule.RegisterMonitorFileEvents = (uint)(FilterAPI.FileChangedEvents.NotifyFileWasCreated | FilterAPI.FileChangedEvents.NotifyFileWasDeleted | FilterAPI.FileChangedEvents.NotifyFileInfoWasChanged
+                | FilterAPI.FileChangedEvents.NotifyFileWasRenamed | FilterAPI.FileChangedEvents.NotifyFileWasWritten | FilterAPI.FileChangedEvents.NotifyFileSecurityWasChanged | FilterAPI.FileChangedEvents.NotifyFileWasRead);
+
+            filterRule.RegisterMonitorFileIOEvents = 0x0;
+            filterRule.RegisterControlFileIOEvents = 0x0;
+            filterRule.AccessFlag = (uint)FilterAPI.ALLOW_MAX_RIGHT_ACCESS;
+            filterRule.EnableMonitorEventBuffer = true;
+
+            InitializeFilterRuleForm();
+        }
+
+        public FilterRuleForm(FileFilterRule _filterRule)
+        {
+            passInFilterRule = _filterRule;
+            filterRule = _filterRule.Copy();
+
+            InitializeFilterRuleForm();
+        }
+
+        private void InitializeFilterRuleForm()
         {
             InitializeComponent();
 
-            filterRule = _filterRule;
             textBox_IncludeFilterMask.Text = filterRule.IncludeFileFilterMask;
             textBox_ExcludeFilterMask.Text = filterRule.ExcludeFileFilterMasks;
-            textBox_SelectedEvents.Text = filterRule.EventType.ToString();
+            textBox_SelectedEvents.Text = filterRule.RegisterMonitorFileEvents.ToString();
             textBox_IncludePID.Text = filterRule.IncludeProcessIds;
             textBox_ExcludePID.Text = filterRule.ExcludeProcessIds;
             textBox_ExcludeProcessNames.Text = filterRule.ExcludeProcessNames;
             textBox_IncludeProcessNames.Text = filterRule.IncludeProcessNames;
             textBox_ExcludeUserNames.Text = filterRule.ExcludeUserNames;
             textBox_IncludeUserNames.Text = filterRule.IncludeUserNames;
-            textBox_MonitorIO.Text = filterRule.MonitorIO.ToString();
+            textBox_MonitorIO.Text = filterRule.RegisterMonitorFileIOEvents.ToString();
             textBox_FilterDesiredAccess.Text = filterRule.FilterDesiredAccess.ToString();
             textBox_FilterDisposition.Text = filterRule.FilterDisposition.ToString();
             textBox_FilterCreateOptions.Text = filterRule.FilterCreateOptions.ToString();
+            checkBox_MonitorEventBuffer.Checked = filterRule.EnableMonitorEventBuffer;
 
-            if (GlobalConfig.filterType == FilterAPI.FilterType.FILE_SYSTEM_MONITOR)
+            if (GlobalConfig.filterType == FilterAPI.FilterType.MONITOR_FILTER)
             {
                 button_ControlSettings.Visible = false;
+                button_ProcessFilterRule.Visible = false;
             }
-          
         }
 
         private void button_SaveFilter_Click(object sender, EventArgs e)
@@ -74,15 +102,21 @@ namespace EaseFilter.CommonObjects
             filterRule.ExcludeUserNames = textBox_ExcludeUserNames.Text;
             filterRule.IncludeProcessIds = textBox_IncludePID.Text;
             filterRule.ExcludeProcessIds = textBox_ExcludePID.Text;
-            filterRule.EventType = uint.Parse(textBox_SelectedEvents.Text);
-            filterRule.MonitorIO = uint.Parse(textBox_MonitorIO.Text);
-            filterRule.Id = GlobalConfig.GetFilterRuleId();
+            filterRule.RegisterMonitorFileEvents = uint.Parse(textBox_SelectedEvents.Text);
+            filterRule.RegisterMonitorFileIOEvents = ulong.Parse(textBox_MonitorIO.Text);
 
             filterRule.FilterDesiredAccess = uint.Parse(textBox_FilterDesiredAccess.Text);
             filterRule.FilterDisposition = uint.Parse(textBox_FilterDisposition.Text);
             filterRule.FilterCreateOptions = uint.Parse(textBox_FilterCreateOptions.Text);
 
-            GlobalConfig.AddFilterRule(filterRule);
+            filterRule.EnableMonitorEventBuffer = checkBox_MonitorEventBuffer.Checked;
+
+            if (null != passInFilterRule)
+            {
+                GlobalConfig.RemoveFilterRule(passInFilterRule.IncludeFileFilterMask);
+            }
+
+            GlobalConfig.AddFileFilterRule(filterRule);
 
             this.Close();
         }
@@ -112,21 +146,21 @@ namespace EaseFilter.CommonObjects
 
         private void button_SelectedEvents_Click(object sender, EventArgs e)
         {
-            OptionForm optionForm = new OptionForm(OptionForm.OptionType.EventNotification, textBox_SelectedEvents.Text);
+            OptionForm optionForm = new OptionForm(OptionForm.OptionType.MonitorFileEvents, textBox_SelectedEvents.Text);
 
             if (optionForm.ShowDialog() == System.Windows.Forms.DialogResult.OK)
             {
-                textBox_SelectedEvents.Text = optionForm.EventNotification.ToString();
+                textBox_SelectedEvents.Text = optionForm.MonitorFileEvents.ToString();
             }
         }
 
         private void button_RegisterMonitorIO_Click(object sender, EventArgs e)
         {
-            OptionForm optionForm = new OptionForm(OptionForm.OptionType.Register_Request, textBox_MonitorIO.Text,true);
+            OptionForm optionForm = new OptionForm(OptionForm.OptionType.MonitorFileIOEvents, textBox_MonitorIO.Text,true);
 
             if (optionForm.ShowDialog() == System.Windows.Forms.DialogResult.OK)
             {
-                textBox_MonitorIO.Text = optionForm.RequestRegistration.ToString();
+                textBox_MonitorIO.Text = optionForm.MonitorIOEvents.ToString();
             }
         }
 
@@ -171,59 +205,76 @@ namespace EaseFilter.CommonObjects
             }
         }
 
-        private void textBox_IncludeFilterMask_MouseHover(object sender, EventArgs e)
+        private void button_ProcessFilterRule_Click(object sender, EventArgs e)
         {
-            toolTip1.Show("Input managed file filter mask with wild card character '*', for map drive format '*\\192.168.1.1\\shareName\\foldername\\*'", textBox_IncludeFilterMask);
+            ProcessFilterSetting processSettingForm = new ProcessFilterSetting();
+
+            if (processSettingForm.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            {
+               ProcessFilterRule processFilterRule =  processSettingForm.selectedFilterRule;
+            }
+        }      
+
+        private void button_InfoFilterMask_Click(object sender, EventArgs e)
+        {
+            MessageBox.Show("Input managed file filter mask with wild card character '*', it is unique index of the filter rule, to filter map drive file, you can use the filter mask like this: '*\\192.168.1.1\\shareName\\foldername\\*'");
         }
 
-        private void textBox_ExcludeFilterMask_MouseHover(object sender, EventArgs e)
+        private void button_InfoExcludeFileFilterMask_Click(object sender, EventArgs e)
         {
-            toolTip1.Show("Exclude the files IO with this setting, you can add multiple exclude file filter masks seperated with ';'.", textBox_ExcludeFilterMask);
+            MessageBox.Show("Skip all the I/Os which the file name matches the exclude file filter mask, seperated with ';' for multiple exclude file filter masks.");
         }
 
-        private void textBox_IncludeProcessNames_MouseHover(object sender, EventArgs e)
+        private void button_InfoIncludeProcessName_Click(object sender, EventArgs e)
         {
-            toolTip1.Show("If the include process name is not empty,then the filter driver only manages the files were opened by the include process name.", textBox_IncludeProcessNames);
+            MessageBox.Show("Only the IOs which were initiated by the process of the include process name list will be monitored or controlled by the filter driver for this filter rule.");
         }
 
-        private void textBox_ExcludeProcessNames_MouseHover(object sender, EventArgs e)
+        private void button_InfoExcludeProcessName_Click(object sender, EventArgs e)
         {
-            toolTip1.Show("If the exclude process name is not empty,then the filter driver won't manage the files were opened by the exclude process name.", textBox_ExcludeProcessNames);
+            MessageBox.Show("All the IOs which were initiated by the process of the exclude process name list will be skipped by the filter driver for this filter rule.");
         }
 
-        private void textBox_IncludeUserNames_MouseHover(object sender, EventArgs e)
+        private void button_InfoIncludeUserName_Click(object sender, EventArgs e)
         {
-            toolTip1.Show("If the include user name is not empty,then the filter driver only manages the files were opened by the include user name.", textBox_IncludeUserNames);
+            MessageBox.Show("Only the IOs which were initiated by the user of the include user name list will be monitored or controlled by the filter driver for this filter rule.");
         }
 
-        private void textBox_ExcludeUserNames_MouseHover(object sender, EventArgs e)
+        private void button_InfoExcludeUserName_Click(object sender, EventArgs e)
         {
-            toolTip1.Show("If the exclude user name is not empty,then the filter driver won't manage the files were opened by the exclude user name.", textBox_ExcludeUserNames);
+            MessageBox.Show("All the IOs which were initiated by the process of the exclude user name list will be skipped by the filter driver for this filter rule.");
         }
 
-        private void textBox_SelectedEvents_MouseHover(object sender, EventArgs e)
+        private void button_InfoDesiredAccess_Click(object sender, EventArgs e)
         {
-            toolTip1.Show("This is the asynchronous IO notification with the user name, process name, file name information after the file was closed.", textBox_SelectedEvents);
+            MessageBox.Show("Skip the IOs when the CreateFile DesiredAccess doesn't match any bit of the value if the DesiredAccess is not zero.");
         }
 
-        private void textBox_MonitorIO_MouseHover(object sender, EventArgs e)
+        private void button_InfoDisposition_Click(object sender, EventArgs e)
         {
-            toolTip1.Show("This is the asynchronous IO notification with the user name, process name, file name and detail IO data information.", textBox_MonitorIO);
+            MessageBox.Show("Skip the IOs when the CreateFile's Disposition doesn't match any bit of the value if the Disposition is not zero.");
         }
 
-        private void textBox_FilterDesiredAccess_MouseHover(object sender, EventArgs e)
+        private void button_InfoCreatOptions_Click(object sender, EventArgs e)
         {
-            toolTip1.Show("If the IO was registered, and if the DesiredAccess is not 0, only the file opens with this DesiredAccess will trigger the callback.", textBox_FilterDesiredAccess);
+            MessageBox.Show("Skip the IOs when the CreateFile's CreatOptions doesn't match any bit of the value if the CreatOptions is not zero.");
         }
 
-        private void textBox_FilterDisposition_MouseHover(object sender, EventArgs e)
+        private void button_InfoFileEvents_Click(object sender, EventArgs e)
         {
-            toolTip1.Show("If the IO was registered, and if the Disposition is not 0, only the file opens with this Disposition will trigger the callback.", textBox_FilterDisposition);
+            MessageBox.Show("Get the notification after the registered file event was fired and the file handle was closed, you will get only one event even the file was read/written many times before it was closed.");
         }
 
-        private void textBox_FilterCreateOptions_MouseHover(object sender, EventArgs e)
+        private void button_InfoMonitorIO_Click(object sender, EventArgs e)
         {
-            toolTip1.Show("If the IO was registered, and if the CreateOptions is not 0, only the file opens with this CreateOptions will trigger the callback.", textBox_FilterCreateOptions);
+            MessageBox.Show("Get the notfication right after the registered IO was fired, the file handle is not closed, you will get as many events as the times of the file was read/written if it was registered.");
+        }
+
+        private void button_MonitorBufferInfo_Click(object sender, EventArgs e)
+        {
+            string info = "Enable the filter driver to send the monitor events to the user mode service asynchronously,"
+                        + "or the filter driver will send the monitor events synchronously, block and wait till the events being picked up.";
+            MessageBox.Show(info);
         }      
 
     }

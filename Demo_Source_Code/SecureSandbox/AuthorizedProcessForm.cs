@@ -25,6 +25,7 @@ using System.Text;
 
 using System.Windows.Forms;
 
+using EaseFilter.FilterControl;
 using EaseFilter.CommonObjects;
 
 namespace SecureSandbox
@@ -39,18 +40,18 @@ namespace SecureSandbox
             public uint AccessFlag;
         }
 
-        public FilterRule currentFilterRule = null;
+        public FileFilterRule currentFilterRule = null;
         ProcessRight selectedProcessRight;
         Dictionary<string, ProcessRight> processRights = new Dictionary<string, ProcessRight>();
 
-        public Form_ProcessRights(ref FilterRule filterRule)
+        public Form_ProcessRights(ref FileFilterRule filterRule)
         {
             InitializeComponent();
             currentFilterRule = filterRule;
 
             StartPosition = FormStartPosition.CenterParent;
 
-            string[] processRightList = filterRule.ProcessRights.ToLower().Split(new char[] { ';' });
+            string[] processRightList = filterRule.ProcessNameRights.ToLower().Split(new char[] { ';' });
             if (processRightList.Length > 0)
             {
                 foreach (string processRightStr in processRightList)
@@ -520,7 +521,7 @@ namespace SecureSandbox
 
         private void button_ApplyAll_Click(object sender, EventArgs e)
         {
-            currentFilterRule.ProcessRights = "";
+            currentFilterRule.ProcessNameRights = "";
             currentFilterRule.ProcessIdRights = "";
 
             foreach (ProcessRight processRight in processRights.Values )
@@ -531,7 +532,7 @@ namespace SecureSandbox
                 }
                 else
                 {
-                    currentFilterRule.ProcessRights += processRight.ProcessName + "!" + processRight.AccessFlag + ";";
+                    currentFilterRule.ProcessNameRights += processRight.ProcessName + "!" + processRight.AccessFlag + ";";
                 }
             }
         }

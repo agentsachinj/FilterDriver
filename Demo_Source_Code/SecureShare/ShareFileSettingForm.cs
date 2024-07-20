@@ -45,16 +45,6 @@ namespace  SecureShare
             this.textBox_ProtectFolderWhiteList.Text = GlobalConfig.ProtectFolderWhiteList;
             this.textBox_ProtectFolderBlackList.Text = GlobalConfig.ProtectFolderBlackList;
 
-            if (GlobalConfig.StoreSharedFileMetaDataInServer)
-            {
-                radioButton_Server.Checked = true;
-                radioButton_Local.Checked = false;
-            }
-            else
-            {
-                radioButton_Server.Checked = false;
-                radioButton_Local.Checked = true;
-            }
         }
 
         private void button_BrowseFolder_Click(object sender, EventArgs e)
@@ -90,20 +80,7 @@ namespace  SecureShare
             GlobalConfig.ShareFolderWhiteList = textBox_ShareFolderWhiteList.Text;
             GlobalConfig.ShareFolderBlackList = textBox_ShareFolderBlackList.Text;
 
-            if (radioButton_Local.Checked)
-            {
-                GlobalConfig.StoreSharedFileMetaDataInServer = false;
-            }
-            else
-            {
-                GlobalConfig.StoreSharedFileMetaDataInServer = true;
-                if (GlobalConfig.AccountName.Trim().Length == 0)
-                {
-                    string accountName = "testaccount." + Environment.MachineName + "." + Guid.NewGuid().ToString();
-                    GlobalConfig.AccountName = accountName;
-                }
-            }
-
+            GlobalConfig.StoreSharedFileMetaDataInServer = false;
             GlobalConfig.DRInfoFolder = textBox_DRFolder.Text;
 
             if (!Directory.Exists(GlobalConfig.ShareFolder))
@@ -121,7 +98,7 @@ namespace  SecureShare
                 Directory.CreateDirectory(GlobalConfig.DRInfoFolder);
             }
 
-            FilterWorker.ApplySettingsToFilterDriver(); 
+            GlobalConfig.SaveConfigSetting();
 
             this.Close();
         }
@@ -131,7 +108,7 @@ namespace  SecureShare
             MessageBoxHelper.PrepToCenterMessageBoxOnForm(this);
             string helpInfo = "1.Protected folder is a real time encryption and decryption folder, if you copy a file to this folder, it will be encrypted automatically with default 256 bits encryption key and a random unique iv, so don't copy the encrypted files this folder, or it will be encrypted again. if you want to copy the encrypted file out of this folder, you need to add the process name to unauhtorized process list, for example if you copy it with Windows explorer, then add explorer.exe to the black list.\r\n\r\n";
             helpInfo += "2.Shared file drop folder, you can copy the encrypted share files to this folder, this folder won't encrypt the new created file, but it can decrypt the encrypted file automatically for the authorized processes.\r\n\r\n";
-            helpInfo += "3.When you create the encrypted file from share file manager, the meta data of the encrypted file will be stored in local or in EaseFilter server, if you want to distribute the encrypted file to out of your network, choose the server option.\r\n";
+            helpInfo += "3.When you create the encrypted file from share file manager, the meta data of the encrypted file will be stored in local or in server, if you store the meta data in server, you can grant or revoke access rights anytime anywhere.\r\n";
 
             MessageBox.Show(helpInfo, "How to set the configuration?", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }

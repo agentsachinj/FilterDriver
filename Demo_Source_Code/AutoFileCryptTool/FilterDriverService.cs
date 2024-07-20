@@ -22,87 +22,73 @@ using System.Linq;
 using System.Text;
 using System.Runtime.InteropServices;
 
+using EaseFilter.FilterControl;
 using EaseFilter.CommonObjects;
 
 namespace AutoFileCryptTool
 {
     public class FilterDriverService
     {
+
+        static FilterControl filterControl = new FilterControl();
+
+        public static bool SendConfigSettingsToFilter(ref string lastError)
+        {
+            filterControl.ClearFilters();
+            foreach (FileFilterRule filterRule in GlobalConfig.FilterRules.Values)
+            {
+                FileFilter fileFilter = filterRule.ToFileFilter();
+                filterControl.AddFilter(fileFilter);
+            }
+
+            if (!filterControl.SendConfigSettingsToFilter(ref lastError))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
         public static bool StartFilterService(out string lastError)
         {
             //Purchase a license key with the link: http://www.easefilter.com/Order.htm
         //Email us to request a trial key: info@easefilter.com //free email is not accepted.
-            string registerKey = GlobalConfig.registerKey;
+            string licenseKey = GlobalConfig.licenseKey;
+            GlobalConfig.filterType = FilterAPI.FilterType.ENCRYPTION_FILTER;
 
             bool ret = false;
+
+            lastError = string.Empty;
+
             try
             {
-               
-                lastError = string.Empty;
-
-                ret = FilterAPI.StartFilter((int)GlobalConfig.FilterConnectionThreads
-                                            , registerKey
-                                            , new FilterAPI.FilterDelegate(FilterCallback)
-                                            , new FilterAPI.DisconnectDelegate(DisconnectCallback)
-                                            , ref lastError);
+                ret = filterControl.StartFilter(GlobalConfig.filterType, GlobalConfig.FilterConnectionThreads, GlobalConfig.ConnectionTimeOut, licenseKey, ref lastError);
                 if (!ret)
                 {
-                    EventManager.WriteMessage(30, "StartFilter", EventLevel.Error, "Start filter service failed with error " + lastError);
                     return ret;
                 }
 
-
-                GlobalConfig.EnableDefaultIVKey = true;
-                GlobalConfig.SendConfigSettingsToFilter();
+                ret = SendConfigSettingsToFilter(ref lastError);
 
                 EventManager.WriteMessage(102, "StartFilter", EventLevel.Information, "Start filter service succeeded.");
             }
             catch (Exception ex)
             {
-                lastError = ex.Message;
                 EventManager.WriteMessage(104, "StartFilter", EventLevel.Error, "Start filter service failed with error " + ex.Message);
+                ret = false;
             }
 
             return ret;
         }
 
         public static bool StopService()
-        {
-            FilterAPI.StopFilter();
+        {           
             GlobalConfig.Stop();
+            filterControl.StopFilter();
+
+            EventManager.WriteMessage(102, "StopFilter", EventLevel.Information, "Stopped filter service succeeded.");
 
             return true;
-        }
-
-        static Boolean FilterCallback(IntPtr sendDataPtr, IntPtr replyDataPtr)
-        {
-            Boolean ret = true;
-
-            try
-            {
-                FilterAPI.MessageSendData messageSend = new FilterAPI.MessageSendData();
-                messageSend = (FilterAPI.MessageSendData)Marshal.PtrToStructure(sendDataPtr, typeof(FilterAPI.MessageSendData));        
-
-                if (FilterAPI.MESSAGE_SEND_VERIFICATION_NUMBER != messageSend.VerificationNumber)
-                {
-                    EventManager.WriteMessage(139, "FilterCallback", EventLevel.Error, "Received message corrupted.Please check if the MessageSendData structure is correct.");
-                    return false;
-                }
-
-              
-                return ret;
-            }
-            catch (Exception ex)
-            {
-                EventManager.WriteMessage(134, "FilterCallback", EventLevel.Error, "filter callback exception." + ex.Message);
-                return false;
-            }
-
-        }
-
-        static void DisconnectCallback()
-        {
-            EventManager.WriteMessage(82, "DisconnectCallback", EventLevel.Information, "filter service is disconnected.");
         }
 
     }

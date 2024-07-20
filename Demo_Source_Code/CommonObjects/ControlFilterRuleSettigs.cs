@@ -24,51 +24,47 @@ using System.Linq;
 using System.Text;
 using System.Windows.Forms;
 
+using EaseFilter.FilterControl;
+
 namespace EaseFilter.CommonObjects
 {
     public partial class ControlFilterRuleSettigs : Form
     {
-        public FilterRule filterRule = new FilterRule();
+        public FileFilterRule filterRule = new FileFilterRule();
 
         public ControlFilterRuleSettigs()
         {
         }
 
-        public ControlFilterRuleSettigs(FilterRule _filterRule)
+        public ControlFilterRuleSettigs(FileFilterRule _filterRule)
         {
             InitializeComponent();
             filterRule = _filterRule;
 
-            textBox_FileAccessFlags.Text = filterRule.AccessFlag.ToString();
-            textBox_PassPhrase.Text = filterRule.EncryptionPassPhrase;
-            textBox_HiddenFilterMask.Text = filterRule.HiddenFileFilterMasks;
-            textBox_ReparseFileFilterMask.Text = filterRule.ReparseFileFilterMasks;
-            textBox_ControlIO.Text = filterRule.ControlIO.ToString();
+            textBox_FileAccessFlags.Text = filterRule.AccessFlag.ToString();        
+            textBox_ControlIO.Text = filterRule.RegisterControlFileIOEvents.ToString();
             checkBox_EnableProtectionInBootTime.Checked = filterRule.IsResident;
-
-            textBox_ProcessRights.Text = filterRule.ProcessRights;
+            textBox_ProcessRights.Text = filterRule.ProcessNameRights;
             textBox_ProcessIdRights.Text = filterRule.ProcessIdRights;
-
+            textBox_SignedProcessAccessRights.Text = filterRule.SignedProcessAccessRights;
             textBox_UserRights.Text = filterRule.UserRights;
 
-            textBox_FilterDesiredAccess.Text = filterRule.FilterDesiredAccess.ToString();
-            textBox_FilterDisposition.Text = filterRule.FilterDisposition.ToString();
-            textBox_FilterCreateOptions.Text = filterRule.FilterCreateOptions.ToString();
-
+            textBox_PassPhrase.Text = filterRule.EncryptionPassPhrase;
+            textBox_HiddenFilterMask.Text = filterRule.HiddenFileFilterMasks;
+            textBox_ReparseFileFilterMask.Text = filterRule.ReparseFileFilterMask;
+            textBox_EncryptWriteBufferSize.Text = filterRule.EncryptWriteBufferSize.ToString();
 
             SetCheckBoxValue();
 
-            if (filterRule.EncryptionKeySize == 16)
+            if (filterRule.EncryptMethod ==  (int)FilterAPI.EncryptionMethod.ENCRYPT_FILE_WITH_SAME_KEY_AND_UNIQUE_IV )
             {
-                radioButton_128.Checked = true;
-            }
-            else if (filterRule.EncryptionKeySize == 24)
-            {
-                radioButton_196.Checked = true;
+                radioButton_EncryptFileWithSameKey.Checked = true;
+                radioButton_EncryptFileWithTagData.Checked = false;
             }
             else
             {
-                radioButton_256.Checked = true;
+                radioButton_EncryptFileWithSameKey.Checked = false;
+                radioButton_EncryptFileWithTagData.Checked = true;
             }
         }
 
@@ -85,6 +81,29 @@ namespace EaseFilter.CommonObjects
             else
             {
                 checkBox_Encryption.Checked = false;
+                textBox_PassPhrase.ReadOnly = true;
+            }
+
+            if ((accessFlags & (uint)FilterAPI.AccessFlag.ENABLE_HIDE_FILES_IN_DIRECTORY_BROWSING) > 0)
+            {
+                checkBox_EnableHidenFile.Checked = true;
+                textBox_HiddenFilterMask.ReadOnly = false;
+            }
+            else
+            {
+                checkBox_EnableHidenFile.Checked = false;
+                textBox_HiddenFilterMask.ReadOnly = true;
+            }
+
+            if ((accessFlags & (uint)FilterAPI.AccessFlag.ENABLE_REPARSE_FILE_OPEN) > 0)
+            {
+                checkBox_EnableReparseFile.Checked = true;
+                textBox_ReparseFileFilterMask.ReadOnly = false;
+            }
+            else
+            {
+                checkBox_EnableReparseFile.Checked = false;
+                textBox_ReparseFileFilterMask.ReadOnly = true;
             }
 
             if ((accessFlags & (uint)FilterAPI.AccessFlag.ALLOW_FILE_ACCESS_FROM_NETWORK) > 0)
@@ -114,8 +133,16 @@ namespace EaseFilter.CommonObjects
                 checkBox_AllowRename.Checked = false;
             }
 
-            if ((accessFlags & (uint)FilterAPI.AccessFlag.ALLOW_WRITE_ACCESS) > 0
-                && (accessFlags & (uint)FilterAPI.AccessFlag.ALLOW_SET_INFORMATION) > 0)
+            if ((accessFlags & (uint)FilterAPI.AccessFlag.ALLOW_WRITE_ACCESS) > 0)
+            {
+                checkBox_AllowFileWriting.Checked = true;
+            }
+            else
+            {
+                checkBox_AllowFileWriting.Checked = false;
+            }
+
+            if ((accessFlags & (uint)FilterAPI.AccessFlag.ALLOW_SET_INFORMATION) > 0)
             {
                 checkBox_AllowChange.Checked = true;
             }
@@ -133,15 +160,7 @@ namespace EaseFilter.CommonObjects
                 checkBox_AllowNewFileCreation.Checked = false;
             }
 
-            if ((accessFlags & (uint)FilterAPI.AccessFlag.ALLOW_FILE_MEMORY_MAPPED) > 0)
-            {
-                checkBox_AllowMemoryMapped.Checked = true;
-            }
-            else
-            {
-                checkBox_AllowMemoryMapped.Checked = false;
-            }
-
+         
             if ((accessFlags & (uint)FilterAPI.AccessFlag.ALLOW_SET_SECURITY_ACCESS) > 0)
             {
                 checkBox_AllowSetSecurity.Checked = true;
@@ -179,14 +198,13 @@ namespace EaseFilter.CommonObjects
                 checkBox_AllowReadEncryptedFiles.Checked = false;
             }
 
-
-            if ((accessFlags & (uint)FilterAPI.AccessFlag.DISABLE_ENCRYPT_DATA_ON_READ) > 0)
+            if (GlobalConfig.EnableSendDeniedEvent)
             {
-                checkBox_EncryptOnRead.Checked = false;
+                checkBox_EnableSendDeniedEvent.Checked = true;
             }
             else
             {
-                checkBox_EncryptOnRead.Checked = true;
+                checkBox_EnableSendDeniedEvent.Checked = false;
             }
         }
 
@@ -196,12 +214,22 @@ namespace EaseFilter.CommonObjects
             uint accessFlags = uint.Parse(textBox_FileAccessFlags.Text);
 
             if (checkBox_Encryption.Checked)
-            {
-                filterRule.EncryptMethod = (int)FilterAPI.EncryptionMethod.ENCRYPT_FILE_WITH_SAME_KEY_AND_UNIQUE_IV;
+            {               
                 encryptionPassPhrase = textBox_PassPhrase.Text;
 
                 //enable encryption for this filter rule.
                 accessFlags = accessFlags | (uint)FilterAPI.AccessFlag.ENABLE_FILE_ENCRYPTION_RULE;
+
+                if (radioButton_EncryptFileWithSameKey.Checked)
+                {
+                    filterRule.EncryptMethod = (int)FilterAPI.EncryptionMethod.ENCRYPT_FILE_WITH_SAME_KEY_AND_UNIQUE_IV;
+                }
+                else
+                {
+                    filterRule.EncryptMethod = (int)FilterAPI.EncryptionMethod.ENCRYPT_FILE_WITH_KEY_IV_AND_TAGDATA_FROM_SERVICE;
+                }
+
+                filterRule.EncryptWriteBufferSize = uint.Parse(textBox_EncryptWriteBufferSize.Text);
             }
 
             if (textBox_HiddenFilterMask.Text.Trim().Length > 0)
@@ -210,31 +238,26 @@ namespace EaseFilter.CommonObjects
                 accessFlags = accessFlags | (uint)FilterAPI.AccessFlag.ENABLE_HIDE_FILES_IN_DIRECTORY_BROWSING;
             }
 
-            if (radioButton_128.Checked)
+            if (checkBox_EnableSendDeniedEvent.Checked)
             {
-                filterRule.EncryptionKeySize = 16;
-            }
-            else if (radioButton_196.Checked)
-            {
-                filterRule.EncryptionKeySize = 24;
+                GlobalConfig.EnableSendDeniedEvent = true;
             }
             else
             {
-                filterRule.EncryptionKeySize = 32;
-            }
+                GlobalConfig.EnableSendDeniedEvent = false;
+            }           
+           
             filterRule.EncryptionPassPhrase = encryptionPassPhrase;
             filterRule.HiddenFileFilterMasks = textBox_HiddenFilterMask.Text;
-            filterRule.ReparseFileFilterMasks = textBox_ReparseFileFilterMask.Text;
+            filterRule.ReparseFileFilterMask = textBox_ReparseFileFilterMask.Text;
             filterRule.AccessFlag = accessFlags;
-            filterRule.ControlIO = uint.Parse(textBox_ControlIO.Text);
+            filterRule.RegisterControlFileIOEvents = ulong.Parse(textBox_ControlIO.Text);
             filterRule.IsResident = checkBox_EnableProtectionInBootTime.Checked;
             filterRule.UserRights = textBox_UserRights.Text;
-            filterRule.ProcessRights = textBox_ProcessRights.Text;
+            filterRule.ProcessNameRights = textBox_ProcessRights.Text;
+            filterRule.Sha256ProcessAccessRights = textBox_Sha256ProcessAccessRights.Text;
+            filterRule.SignedProcessAccessRights = textBox_SignedProcessAccessRights.Text;
             filterRule.ProcessIdRights = textBox_ProcessIdRights.Text;
-            filterRule.Id = GlobalConfig.GetFilterRuleId();
-            filterRule.FilterDesiredAccess = uint.Parse(textBox_FilterDesiredAccess.Text);
-            filterRule.FilterDisposition = uint.Parse(textBox_FilterDisposition.Text);
-            filterRule.FilterCreateOptions = uint.Parse(textBox_FilterCreateOptions.Text);
 
         }
 
@@ -262,44 +285,13 @@ namespace EaseFilter.CommonObjects
 
         private void button_RegisterControlIO_Click(object sender, EventArgs e)
         {
-            OptionForm optionForm = new OptionForm(OptionForm.OptionType.Register_Request, textBox_ControlIO.Text);
+            OptionForm optionForm = new OptionForm(OptionForm.OptionType.ControlFileIOEvents, textBox_ControlIO.Text);
 
             if (optionForm.ShowDialog() == System.Windows.Forms.DialogResult.OK)
             {
-                textBox_ControlIO.Text = optionForm.RequestRegistration.ToString();
+                textBox_ControlIO.Text = optionForm.ControlIOEvents.ToString();
             }
         }
-
-        private void button_FilterDesiredAccess_Click(object sender, EventArgs e)
-        {
-            OptionForm optionForm = new OptionForm(OptionForm.OptionType.FilterDesiredAccess, textBox_FilterDesiredAccess.Text);
-
-            if (optionForm.ShowDialog() == System.Windows.Forms.DialogResult.OK)
-            {
-               textBox_FilterDesiredAccess.Text = optionForm.FilterDesiredAccess.ToString();
-            }
-        }
-
-        private void button_FilterDisposition_Click(object sender, EventArgs e)
-        {
-            OptionForm optionForm = new OptionForm(OptionForm.OptionType.FilterDisposition, textBox_FilterDisposition.Text);
-
-            if (optionForm.ShowDialog() == System.Windows.Forms.DialogResult.OK)
-            {
-                textBox_FilterDisposition.Text = optionForm.FilterDisposition.ToString();
-            }
-        }
-
-        private void button_FilterCreateOptions_Click(object sender, EventArgs e)
-        {
-            OptionForm optionForm = new OptionForm(OptionForm.OptionType.FilterCreateOptions, textBox_FilterCreateOptions.Text);
-
-            if (optionForm.ShowDialog() == System.Windows.Forms.DialogResult.OK)
-            {
-                textBox_FilterCreateOptions.Text = optionForm.FilterCreateOptions.ToString();
-            }
-        }
-
 
         private void button_AddProcessRights_Click(object sender, EventArgs e)
         {
@@ -317,6 +309,41 @@ namespace EaseFilter.CommonObjects
                 }
             }
         }
+
+        private void button_AddSha256ProcessAccessRights_Click(object sender, EventArgs e)
+        {
+            Form_AccessRights accessRightsForm = new Form_AccessRights(Form_AccessRights.AccessRightType.Sha256Process);
+
+            if (accessRightsForm.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            {
+                if (textBox_ProcessRights.Text.Trim().Length > 0)
+                {
+                    textBox_Sha256ProcessAccessRights.Text += ";" + accessRightsForm.accessRightText;
+                }
+                else
+                {
+                    textBox_Sha256ProcessAccessRights.Text = accessRightsForm.accessRightText;
+                }
+            }
+        }
+
+        private void button_AddSignedProcessAccessRights_Click(object sender, EventArgs e)
+        {
+            Form_AccessRights accessRightsForm = new Form_AccessRights(Form_AccessRights.AccessRightType.SignedProcess);
+
+            if (accessRightsForm.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            {
+                if (textBox_ProcessRights.Text.Trim().Length > 0)
+                {
+                    textBox_SignedProcessAccessRights.Text += ";" + accessRightsForm.accessRightText;
+                }
+                else
+                {
+                    textBox_SignedProcessAccessRights.Text = accessRightsForm.accessRightText;
+                }
+            }
+        }     
+
 
         private void button_AddProcessIdRights_Click(object sender, EventArgs e)
         {
@@ -395,11 +422,11 @@ namespace EaseFilter.CommonObjects
             uint accessFlags = uint.Parse(textBox_FileAccessFlags.Text);
             if (!checkBox_AllowChange.Checked)
             {
-                accessFlags = accessFlags & ((uint)~FilterAPI.AccessFlag.ALLOW_WRITE_ACCESS) & ((uint)~FilterAPI.AccessFlag.ALLOW_SET_INFORMATION);
+                accessFlags = accessFlags & ((uint)~FilterAPI.AccessFlag.ALLOW_SET_INFORMATION);
             }
             else
             {
-                accessFlags = accessFlags | ((uint)FilterAPI.AccessFlag.ALLOW_WRITE_ACCESS) | ((uint)FilterAPI.AccessFlag.ALLOW_SET_INFORMATION);
+                accessFlags = accessFlags | ((uint)FilterAPI.AccessFlag.ALLOW_SET_INFORMATION);
             }
 
             textBox_FileAccessFlags.Text = accessFlags.ToString();
@@ -453,17 +480,17 @@ namespace EaseFilter.CommonObjects
             textBox_FileAccessFlags.Text = accessFlags.ToString();
         }
 
-        private void checkBox_AllowMemoryMapped_CheckedChanged(object sender, EventArgs e)
+        private void checkBox_AllowFileWriting_CheckedChanged(object sender, EventArgs e)
         {
             uint accessFlags = uint.Parse(textBox_FileAccessFlags.Text);
 
-            if (!checkBox_AllowMemoryMapped.Checked)
+            if (!checkBox_AllowFileWriting.Checked)
             {
-                accessFlags = accessFlags & ((uint)~FilterAPI.AccessFlag.ALLOW_FILE_MEMORY_MAPPED);
+                accessFlags = accessFlags & ((uint)~FilterAPI.AccessFlag.ALLOW_WRITE_ACCESS);
             }
             else
             {
-                accessFlags = accessFlags | ((uint)FilterAPI.AccessFlag.ALLOW_FILE_MEMORY_MAPPED);
+                accessFlags = accessFlags | ((uint)FilterAPI.AccessFlag.ALLOW_WRITE_ACCESS);
             }
 
             textBox_FileAccessFlags.Text = accessFlags.ToString();
@@ -534,111 +561,127 @@ namespace EaseFilter.CommonObjects
         }
 
 
-        private void checkBox_EncryptOnRead_CheckedChanged(object sender, EventArgs e)
+        private void checkBox_EnableHidenFile_CheckedChanged(object sender, EventArgs e)
         {
-            uint accessFlags = uint.Parse(textBox_FileAccessFlags.Text.Trim());
-            if (checkBox_EncryptOnRead.Checked)
-            {
-                if (!checkBox_Encryption.Checked)
-                {
-                    MessageBoxHelper.PrepToCenterMessageBoxOnForm(this);
-                    MessageBox.Show("The encryption is not enabled, enable it first.", "EncryptOnRead", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
+            uint accessFlags = uint.Parse(textBox_FileAccessFlags.Text);
 
-                accessFlags &= ~(uint)FilterAPI.AccessFlag.DISABLE_ENCRYPT_DATA_ON_READ;
+            if (checkBox_EnableHidenFile.Checked)
+            {
+                textBox_HiddenFilterMask.ReadOnly = false;
+                accessFlags = accessFlags | ((uint)FilterAPI.AccessFlag.ENABLE_HIDE_FILES_IN_DIRECTORY_BROWSING);
             }
             else
             {
-                accessFlags |= (uint)FilterAPI.AccessFlag.DISABLE_ENCRYPT_DATA_ON_READ;
+                textBox_HiddenFilterMask.ReadOnly = true;
+                accessFlags = accessFlags & ((uint)~FilterAPI.AccessFlag.ENABLE_HIDE_FILES_IN_DIRECTORY_BROWSING);
+            }
+
+            textBox_FileAccessFlags.Text = accessFlags.ToString();
+        }
+
+        private void checkBox_EnableReparseFile_CheckedChanged(object sender, EventArgs e)
+        {
+            uint accessFlags = uint.Parse(textBox_FileAccessFlags.Text);
+
+            if (checkBox_EnableReparseFile.Checked)
+            {
+                textBox_ReparseFileFilterMask.ReadOnly = false;
+                accessFlags = accessFlags | ((uint)FilterAPI.AccessFlag.ENABLE_REPARSE_FILE_OPEN);
+            }
+            else
+            {
+                textBox_ReparseFileFilterMask.ReadOnly = true;
+                accessFlags = accessFlags & ((uint)~FilterAPI.AccessFlag.ENABLE_REPARSE_FILE_OPEN);
             }
 
             textBox_FileAccessFlags.Text = accessFlags.ToString();
         }
 
 
-        private void textBox_FileAccessFlags_MouseHover(object sender, EventArgs e)
+        private void button_InfoControlFlag_Click(object sender, EventArgs e)
         {
-            toolTip1.Show("This is the access control flags,uncheck the access right will deny the associated access.", textBox_FileAccessFlags);
+            MessageBox.Show("This is the file access control flags of the filter rule, enable or disable the specific access right by checking or unchecking the selected box.");
         }
 
-        private void textBox_ProcessRights_MouseHover(object sender, EventArgs e)
+        private void button_InfoCopyout_Click(object sender, EventArgs e)
         {
-            toolTip1.Show("You can set the specific processes access rights,to authorize or deny the file access to these processes.", textBox_FileAccessFlags);
+            MessageBox.Show("Prevent the files from being copied out of the folder when it was disabled.");
         }
 
-        private void textBox_UserRights_MouseHover(object sender, EventArgs e)
+        private void button_InfoEncryptNewFile_Click(object sender, EventArgs e)
         {
-            toolTip1.Show("You can set the specific users access rights,to authorize or deny the file access to these users.", textBox_UserRights);
+            MessageBox.Show("Automatically encrypt the new created file when it was enabled, or it won't encrypt the new created file, a use case: copy the encrypted file to the folder, it won't encrypt the file again.");
         }
 
-        private void textBox_ControlIO_MouseHover(object sender, EventArgs e)
+        private void button_InfoDecryption_Click(object sender, EventArgs e)
         {
-            toolTip1.Show("Register the callback I/O, you can modify, allow or block the IO access in the callback function.", textBox_ControlIO);
+            MessageBox.Show("Automatically decrypt the created file when it was enabled, or the process will read the raw data of the encrypted file, a use case: the backup software.");
         }
 
-        private void textBox_FilterDesiredAccess_MouseHover(object sender, EventArgs e)
+        private void button_InfoEncryptOnRead_Click(object sender, EventArgs e)
         {
-            toolTip1.Show("If the IO was registered, and if the DesiredAccess is not 0, only the file opens with this DesiredAccess will trigger the callback.", textBox_FilterDesiredAccess);
+            MessageBox.Show("If you want to encrypt the file only when it was read by the process, you can enable the encryption feature, disable the new file encryption, enable the encryption on the go.");
         }
 
-        private void textBox_FilterDisposition_MouseHover(object sender, EventArgs e)
+        private void button_InfoPassPhrase_Click(object sender, EventArgs e)
         {
-            toolTip1.Show("If the IO was registered, and if the Disposition is not 0, only the file opens with this Disposition will trigger the callback.", textBox_FilterDisposition);
+            MessageBox.Show("Enable the encryption feature and set the encryption key phrase for generating the encryption key.");
         }
 
-        private void textBox_FilterCreateOptions_MouseHover(object sender, EventArgs e)
+        private void button_EnableEncryptionKeyFromService_Click(object sender, EventArgs e)
         {
-            toolTip1.Show("If the IO was registered, and if the CreateOptions is not 0, only the file opens with this CreateOptions will trigger the callback.", textBox_FilterCreateOptions);
-        }      
-
-        private void textBox_ReparseFileFilterMask_MouseHover(object sender, EventArgs e)
-        {
-            toolTip1.Show("You can reparse the file open to another file path with this setting.", textBox_ReparseFileFilterMask);
+            MessageBox.Show("If this is enabled, all encryption/decryption will get the encryption key from the callback service, you also can embed the custom tag data to the new created encrypted file.");
         }
 
-        private void textBox_HiddenFilterMask_MouseHover(object sender, EventArgs e)
+        private void button_HideFileFilterMask_Click(object sender, EventArgs e)
         {
-            toolTip1.Show("You can hide the file names when users browse the folder with this setting.", textBox_HiddenFilterMask);
+            MessageBox.Show("Enable the hiden file feature, hide the file when the file name matches the filter mask, seperate the multiple filter mask with ';' character. i.e. *.txt;*.exe, this will hide .txt and .exe files");
         }
 
-        private void textBox_PassPhrase_MouseHover(object sender, EventArgs e)
+        private void button_InfoReparseFile_Click(object sender, EventArgs e)
         {
-            toolTip1.Show("Enable the transparent file encryption with this passphrase when the accessFlag encryption was enabled.", textBox_PassPhrase);
+            string info = "Enable the reparse file feature,reparse the file open to the new file which the file name will be replaced with the reparse filter mask.\r\n\r\n";
+            info += "i.e. FilterMask = c:\\test\\*txt, ReparseFilterMask = d:\\reparse\\*doc, If you open file c:\\test\\MyTest.txt, it will reparse to the file d:\\reparse\\MyTest.doc.";
+
+            MessageBox.Show(info);
         }
 
-        private void checkBox_EncryptOnRead_MouseHover(object sender, EventArgs e)
+        private void button_InfoProcessNameRights_Click(object sender, EventArgs e)
         {
-            string info = "If encryption on read was enabled, the process always will get the encrypted data." + Environment.NewLine;
-            info += "It doesn't matter if the file was encrypted or not on disk." + Environment.NewLine;
-            info += "Your file will be automatically encrypted when it was sent out from your computer.";
-            toolTip1.Show(info, checkBox_EncryptOnRead);
+            MessageBox.Show("Add or remove the file access right of the process via the process name.");
         }
 
-        private void checkBox_AllowReadEncryptedFiles_MouseHover(object sender, EventArgs e)
+        private void button_InfoSha256ProcessRights_Click(object sender, EventArgs e)
         {
-            string info = "If your file was encrypted on disk, and the process is not allowed to read it," + Environment.NewLine;
-            info += "the process will get the encrypted data instead of the descrypted data." + Environment.NewLine;
-            info += "If you want to copy or backup the encrypted file, uncheck this box for the process.";
-            toolTip1.Show(info, checkBox_AllowReadEncryptedFiles);
+            MessageBox.Show("Add the trusted process with the sha256 hash of the executable binary to filter rule, only the process has the same sha256 hash can access the files. ");
         }
 
-        private void checkBox_AllowCopyOut_MouseHover(object sender, EventArgs e)
+        private void button_InfoProcessIdRights_Click(object sender, EventArgs e)
         {
-            string info = "If the process read the proected file, and the file was not allowed to copy out," + Environment.NewLine;
-            info += "the process will be blocked to create new file anywhere except the current folder." + Environment.NewLine;
-            toolTip1.Show(info, checkBox_AllowCopyOut);
+            MessageBox.Show("Add or remove the file access right of the process via the process Id.");
         }
 
-        private void checkBox_AllowEncryptNewFile_MouseHover(object sender, EventArgs e)
+        private void button_InfoUserRights_Click(object sender, EventArgs e)
         {
-            string info = "If the encryption for new file is not enabled, the new created file won't be encrypted automatically." + Environment.NewLine;
-            info += "If you want to automatically encrypt the new file, you need to check this box." + Environment.NewLine;
-            toolTip1.Show(info, checkBox_AllowEncryptNewFile);
+            MessageBox.Show("Add or remove the file access right of the user via the user name.");
         }
 
-      
+        private void button_InfoControlEvents_Click(object sender, EventArgs e)
+        {
+            MessageBox.Show("Register the control events, you can allow, modify or deny the file I/O.");
+        }
 
-    
+        private void button_InfoSignedProcessRights_Click(object sender, EventArgs e)
+        {
+            MessageBox.Show("Add the trusted process which was signed with the certificate to filter rule, only the authenticated process can access the files. ");
+        }
+
+        private void button_EncryptWriteBufferSize_Click(object sender, EventArgs e)
+        {
+            MessageBox.Show("If the encrypt write buffer size is greater than 0, then the small buffer encryption write will be combined together to a bigger buffer, and write it to the disk.");
+        }
+
+     
+             
     }
 }

@@ -40,15 +40,14 @@ namespace EaseFilter.CommonObjects
         private void button_Ok_Click(object sender, EventArgs e)
         {
             InputText = textBox_Input.Text;
-        }
+        }       
 
-        private void button_FileBrowse_Click(object sender, EventArgs e)
+        private void button_GetFilePath_Click(object sender, EventArgs e)
         {
             if (openFileDialog1.ShowDialog() == System.Windows.Forms.DialogResult.OK)
             {
-                textBox_Input.Text = folderBrowserDialog1.SelectedPath;
+                textBox_Input.Text = openFileDialog1.FileName;
             }
-
         }
     }
 }
