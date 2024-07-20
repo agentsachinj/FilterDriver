@@ -8,7 +8,7 @@
 static ULONG g_FilterRuleId = 0;
 
 class ProcessFilterRule
- {
+{
 		public:
 
 		/// <summary>
@@ -45,7 +45,7 @@ class ProcessFilterRule
  };
 
 class RegistryFilterRule
-  {
+{
 	public:
 		/// <summary>
         /// the id to identyfy this filter rule. 

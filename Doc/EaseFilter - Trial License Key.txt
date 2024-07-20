@@ -29,3 +29,12 @@ Press any key to continue . . .
 Stop Filter Service.
 
 ----------------------
+
+Transparent Encryption Filter Driver
+
+You can develop your own kernel mode encryption filter driver if you buy the source code license, it includes the user mode and kernel mode source code.
+
+Here is the price list of the products:
+https://www.easefilter.com/quote.htm
+
+----------------------

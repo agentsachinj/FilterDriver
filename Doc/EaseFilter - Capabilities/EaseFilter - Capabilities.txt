@@ -1,0 +1,124 @@
+https://blog.easefilter.com/
+
+
+The EaseFilter SDK offers a range of features for file security:
+	File Monitoring and Audit: Real-time tracking of file system I/O activities. You can know who accessed your files and when.
+	File Access Control: Control file access to prevent unauthorized users or processes from reaching sensitive files.
+	Transparent File Encryption: Encrypt data on-the-fly, supporting AES-256 military-grade encryption.
+	Secure File Sharing with DRM: Share encrypted files with embedded digital rights management. You can grant or revoke access anytime.
+	Registry Monitoring and Protection: Prevent unauthorized changes to the Windows registry.
+	Process Monitoring and Protection: Keep an eye on process creation and termination to prevent untrusted programs from launching.
+	Secure Sandbox: Safely run untrusted programs with restrictions.
+	Storage Tiering Solution: Automatically move data between local stub files and cloud storage for efficient archiving.
+EaseFilter’s SDK can be customized to meet specific requirements, and they even offer consulting services and source code for creating your own filter driver1.
+
+===================================================
+------------------
+Auto Encrypt - Unit Tests (AutoEncryptDemo.exe)
+------------------
+	Auto Encryption Folder in Computer A
+		C:\Testing\EaseFilter\AutoEncryptFolder\*
+
+	Authorize Processes to Decrypt Files (* or empty for all processes)
+		notepad.exe;wordpad.exe
+
+	Authorize Users to Decrypt Files (Domain\username1)
+		<Domain\username1>
+
+	Enable DRM for Encrypted File Settings
+		Checkbox	
+
+	PassPhrase (must be the same for Computer A and B)
+		your passphrase
+
+	Encryption Folder in Computer B (Use explorer to copy encrypted file)
+		C:\Testing\EaseFilter\EncryptFolder\*
+
+	Authorize Processes to Decrypt Files
+		notepad.exe;wordpad.exe
+
+------------------
+File Access ?
+------------------
+?
+
+------------------
+FileMonitor - Unit Tests (FileMonitor.exe)
+------------------
+
+File Monitor Demo was developed with EaseFilter File Monitor Filter Driver SDK, it demonstrates how to use the EaseFilter File Monitor SDK to monitor the Windows file I/O. 
+The FileMonitor demo tool can monitor the file change and file access in real time, get the notification for all the registered file I/O requests. 
+It can capture the file open, file creation, file change, file read, file written, query file information, set file information, query security information, 
+set security information, file rename, file delete, directory browsing and file close I/O requests. 
+You can log the file I/O information to know who, when, what files were accessed. Here is the FileMonitor demo tool screenshot.
+
+https://blog.easefilter.com/file-monitor-demo-step-by-step/
+
+FileMonitor IO Registration Unit Test
+	1. Register the POST_CREATE and POST_SET_INFORMATION.
+	2. The callback function will get the notification after the file was opened or file information was changed.
+
+	Test file open event passed.
+	The OnFileOpen event was invoked.
+	Test file size change event passed.
+	The OnFileSetFileSize event was invoked.
+
+Monitor File IO Events Unit Test.
+	Register the monitor file IO events: create,rename,delete,written,file info changed, read, security change in the test folder.
+
+	Test new file creation event passed.
+	A test file was created.
+	Test file info change event passed.
+	The test file's attributes were changed.
+	Test file read event passed.
+	The test file's data was read.
+	Test file rename event passed.
+	The test file was renamed.
+	Test file security change event passed.
+	The test file's security was changed.
+	Test file written event passed.
+	The test file was written.
+	Test file delete event passed.
+	The test file was deleted.
+
+
+------------------
+Process Filter - Unit Tests (ProcessMon.exe)
+------------------
+
+Overview of Process Monitor Capabilities
+	Process Monitor includes powerful monitoring and filtering capabilities, including:
+		More data captured for operation input and output parameters
+		Non-destructive filters allow you to set filters without losing data
+		Capture of thread stacks for each operation make it possible in many cases to identify the root cause of an operation
+		Reliable capture of process details, including image path, command line, user and session ID
+		Configurable and moveable columns for any event property
+		Filters can be set for any data field, including fields not configured as columns
+		Advanced logging architecture scales to tens of millions of captured events and gigabytes of log data
+		Process tree tool shows relationship of all processes referenced in a trace
+		Native log format preserves all data for loading in a different Process Monitor instance
+		Process tooltip for easy viewing of process image information
+		Detail tooltip allows convenient access to formatted data that doesn’t fit in the column
+		Cancellable search
+		Boot time logging of all operations
+
+Process Filter Driver Unit Test.
+	DENY_NEW_PROCESS_CREATION control flag test passed.
+	File access control flag ALLOW_OPEN_WITH_CREATE_OR_OVERWRITE_ACCESS test for current process passed
+	PROCESS_CREATION_NOTIFICATION control flag test passed.
+	Register control IO callback for current process test passed.
+	Register monitor IO callback for current process test passed.
+
+
+------------------
+Registry Filter - Unit Tests (RegMon.exe)
+------------------
+Registry Filter Driver Unit Test.
+	1.Test full registry access rights in accessFlag passed, return valueName:EaseFilter Filter Driver
+	2.Test disable open registry key right in accessFlag passed.
+	3.Test registry query value key Reg_Post_Query_Value_Key callback passed, return valueName:EaseFilter Filter Driver
+	4.Test block creating new registry sub key in callback passed.Cannot write to the registry key.
+	5.Test modify registry return data in callback passed, return value S12345,type:System.String
+
+------------------
+===================================================
