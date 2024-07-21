@@ -40,7 +40,18 @@ Auto Encrypt - Unit Tests (AutoEncryptDemo.exe)
 ------------------
 File Access ?
 ------------------
-?
+	https://blog.easefilter.com/file-access-control-lists/
+
+	ALLOW_OPEN_WITH_CREATE_OR_OVERWRITE_ACCESS: allow or block the new file creation.
+	ALLOW_READ_ACCESS:  allow or block the file being read.
+	ALLOW_WRITE_ACCESS: allow or block the file being written.
+	ALLOW_FILE_RENAME:  allow or block the file being renamed.
+	ALLOW_FILE_DELETE: allow or block the file being deleted.
+	ALLOW_SET_SECURITY_ACCESS: allow or block the file’s security being changed.
+	ALLOW_SET_INFORMATION: allow or block the file’s attributes, file size being changed.
+	ALLOW_FILE_ACCESS_FROM_NETWORK: allow or block the file being read from the network via SMB share path.
+	ALLOW_COPY_PROTECTED_FILES_OUT: allow or block the sensitive files being copied out.
+
 
 ------------------
 FileMonitor - Unit Tests (FileMonitor.exe)
@@ -121,4 +132,98 @@ Registry Filter Driver Unit Test.
 	5.Test modify registry return data in callback passed, return value S12345,type:System.String
 
 ------------------
+File Security (?)
+------------------
+File Monitor/File Audit – Track file change on the fly
+	File system monitor filter can monitor the file system activities on the fly. 	With file system monitor filter you can monitor the file activities on file system level, 
+	capture file open, create, overwrite, read, write, query file information, 	set file information, query security information, set security information, file rename, 
+	file delete, directory browsing and file close I/O requests. You can develop the software for the following purposes:
+		Create your own Continuous data protection (CDP) software to log the file update information, write information with offset and length in real time.
+		Audit your file content. You can intercept any file system call, analyze it content, log it.
+		Create Access Log, you will know who, when, what files were accessed.
+		Journal the file update information. This control may be based on any file parameters, such as its location, type, size, etc.
+
+File Protector – Prevent your sensitive data from being accessed by unauthorized users or processes
+	File system control filter can control the file activities, which you can intercept the file system call, modify its content before or after the request goes down 
+	to the file system, allow/deny/cancel its execution based on the filter rule. You can fully control file open/create/overwrite, read/write, query/set file attribute/size/time 
+	security information, rename/delete, directory browsing these Io requests. With file system control filter you can developer these kinds of software:
+		Create your Data protection Software. Block accessing your data based on your security policy, prevent data modification without permission.
+		Create your own encryption software via encrypt the write data and decrypt the read data.
+		Create your own custom security policies to control the file access.
+		Hide or replace the files in the directory. You can modify the directory buffer to hide some files or change file name.
+
+File Encryption At Rest – Transparent on-access, file level encryption
+	EaseFilter File system encryption filter driver SDK provides you  a comprehensive security solution to develop the transparent encryption products which it can encrypt or 
+	decrypt files on-the-fly, it can allow only authorized users or processes to access the encrypted files.
+		Supported strong cryptographic algorithm Rijndael is a high security algorithm which was chosen by the National Institute of Standards and Technology (NIST) as the new 
+		Advanced Encryption Standard (AES), it can support key length 128-bits,192-bits and 256-bits.
+
+Secure File Sharing – Control share file access with digital rights embedded
+	Encrypt the file with 256-bits key, embedded with the digital rights management protection, only the authorized users, processes and computers can access the encrypted file. 
+	Share your files with fully control, you can expire or revoke the file access at any time, even after the file has been shared. Add or remove the authorized users, processes 
+	and computers at any time.
+
+Registry access monitoring and protection
+	Monitoring registry calls to track the registry changes. When the registry key, value or security was modified, the callback routine will be invoked with a data structure that 
+	contains information that is specific to the type of registry operation.
+		Blocking registry calls to prevent your registry from being changed by unauthorized processes. When the registry key, value or security is going to be modified, 
+		the callback routine will be invoked with a data structure that contains information that is specific to the type of registry operation, 
+		If a RegistryCallback routine returns a status value “STATUS_ACCESS_DENIED” for a pre-notification, this registry operation will be blocked and the error code will be returned.
+
+Process access monitoring and protection
+	Monitoring the process and thread creation or termination, get the notification of the process and thread operations when you register the events. Prevent the untrusted 
+	executable binaries ( malwares) from being launched, protect your data being damaged by the untrusted processes.
+
+Secure Sandbox Solution
+	A sandbox is a secure, isolated and a tightly controlled environment where programs can be run and data can be protected. Sandboxes restrict what a piece of code can do, 
+	giving it just as many, permissions as it needs without adding additional permissions that could be abused. Prevent malicious or malfunctioning programs from running. 
+	Run untrusted Windows programs safely in Easefilter Secure Sandbox. Protect your confidential files in Easefilter Secure Sandbox.
+
+===================================================
+Features which are not there in FenixPyre Agent =>
+
+Auto Encrypt - 
+	Authorize Users to Decrypt Files (Domain\username1)
+	PassPhrase (must be the same for Computer A and B)
+		your passphrase
+
+File Access -
+	ALLOW_OPEN_WITH_CREATE_OR_OVERWRITE_ACCESS: allow or block the new file creation.
+	ALLOW_READ_ACCESS:  allow or block the file being read.
+	ALLOW_WRITE_ACCESS: allow or block the file being written.
+	ALLOW_FILE_RENAME:  allow or block the file being renamed.
+	ALLOW_FILE_DELETE: allow or block the file being deleted.
+	ALLOW_SET_SECURITY_ACCESS: allow or block the file’s security being changed.
+	ALLOW_SET_INFORMATION: allow or block the file’s attributes, file size being changed.
+	ALLOW_FILE_ACCESS_FROM_NETWORK: allow or block the file being read from the network via SMB share path.
+
+Secure File Sharing – only the authorized users, processes and computers can access the encrypted file.
+
+Registry access monitoring and protection - 
+	Blocking registry calls to prevent your registry from being changed by unauthorized processes. When the registry key, value or security is going to be modified, 
+	the callback routine will be invoked with a data structure that contains information that is specific to the type of registry operation, 
+	If a RegistryCallback routine returns a status value “STATUS_ACCESS_DENIED” for a pre-notification, this registry operation will be blocked and the error code will be returned.
+
+File Encryption At Rest – Transparent on-access, file level encryption - 
+	EaseFilter File system encryption filter driver SDK provides you  a comprehensive security solution to develop the transparent encryption products which it can encrypt or 
+	decrypt files on-the-fly, it can allow only authorized users or processes to access the encrypted files.
+	Supported strong cryptographic algorithm Rijndael is a high security algorithm which was chosen by the National Institute of Standards and Technology (NIST) as the new 
+	Advanced Encryption Standard (AES), it can support key length 128-bits,192-bits and 256-bit
+
+File Protector – Prevent your sensitive data from being accessed by unauthorized users or processes
+	With file system control filter you can develope these kinds of software:
+		Create your Data protection Software. Block accessing your data based on your security policy, prevent data modification without permission.
+		Create your own encryption software via encrypt the write data and decrypt the read data.
+		Create your own custom security policies to control the file access.
+		Hide or replace the files in the directory. You can modify the directory buffer to hide some files or change file name.
+
+File Monitor/File Audit – Track file change on the fly
+	With file system monitor filter you can monitor the file activities on file system level, capture file open, create, overwrite, read, write, query file information, 	
+	set file information, query security information, set security information, file rename, file delete, directory browsing and file close I/O requests. 
+	You can develop the software for the following purposes:
+		Create your own Continuous data protection (CDP) software to log the file update information, write information with offset and length in real time.
+		Audit your file content. You can intercept any file system call, analyze it content, log it.
+		Create Access Log, you will know who, when, what files were accessed.
+		Journal the file update information. This control may be based on any file parameters, such as its location, type, size, etc.
+
 ===================================================
